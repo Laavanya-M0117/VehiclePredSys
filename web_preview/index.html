@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vehicle Predictive Triage — Live Laptop Web Showcase</title>
+  <style>
+    :root {
+      --bg: #0D0E15;
+      --card-bg: #161922;
+      --border: #232736;
+      --accent: #6C5CE7;
+      --accent-light: #A29BFE;
+      --green: #00B894;
+      --yellow: #FDCB6E;
+      --red: #FF7675;
+      --blue: #74B9FF;
+      --text: #F5F6FA;
+      --text-muted: #8E92A4;
+      --text-dim: #5A5E73;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .header-title h1 { font-size: 24px; font-weight: 700; }
+    .header-title p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    
+    .live-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 184, 148, 0.15); color: var(--green); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid rgba(0, 184, 148, 0.3); }
+    .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+    @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+    .grid-container { display: grid; grid-template-columns: 360px 1fr 340px; gap: 20px; }
+
+    /* Phone Mockup Frame */
+    .phone-wrapper { background: #000; border-radius: 40px; padding: 14px; border: 4px solid #2A2E3D; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+    .phone-screen { background: var(--bg); border-radius: 30px; overflow: hidden; border: 1px solid var(--border); min-height: 580px; display: flex; flex-direction: column; }
+    .phone-header { background: var(--card-bg); padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+    .phone-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+
+    .card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border); }
+
+    .health-gauge-box { display: flex; align-items: center; gap: 18px; }
+    .gauge-circle { width: 84px; height: 84px; border-radius: 50%; border: 8px solid var(--border); border-top-color: var(--green); border-right-color: var(--green); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .gauge-circle .score { font-size: 26px; font-weight: 800; }
+    .gauge-circle .label { font-size: 10px; color: var(--text-muted); }
+
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .metric-tile { background: var(--card-bg); border-radius: 14px; padding: 14px; border: 1px solid var(--border); }
+    .metric-tile .label { font-size: 12px; color: var(--text-muted); }
+    .metric-tile .value { font-size: 22px; font-weight: 700; margin-top: 6px; }
+
+    .bar-group { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+    .bar-item { display: flex; flex-direction: column; gap: 6px; }
+    .bar-item .bar-label { display: flex; justify-content: space-between; font-size: 13px; }
+    .progress-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 50%; background: var(--accent); transition: width 0.4s ease; }
+
+    .scenario-btn { background: var(--card-bg); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.2s; font-size: 13px; font-weight: 600; width: 100%; margin-bottom: 8px; }
+    .scenario-btn:hover, .scenario-btn.active { border-color: var(--accent); background: rgba(108, 92, 231, 0.15); color: #fff; }
+
+    .alert-card { border-left: 4px solid var(--red); background: var(--card-bg); border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .alert-card.warning { border-left-color: var(--yellow); }
+    .alert-card.info { border-left-color: var(--blue); }
+    
+    .sos-btn { width: 120px; height: 120px; border-radius: 50%; background: var(--card-bg); border: 4px solid var(--red); color: var(--red); font-size: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 20px auto; cursor: pointer; box-shadow: 0 0 20px rgba(255,118,117,0.3); }
+
+    .stepper { display: flex; gap: 8px; margin-bottom: 16px; }
+    .step-pill { flex: 1; padding: 8px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; text-align: center; color: var(--text-muted); cursor: pointer; font-weight: 600; }
+    .step-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .phone-screen-section { display: none; }
+    .phone-screen-section.active { display: flex; flex-direction: column; gap: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-title">
+      <h1>Vehicle Predictive Triage — Interactive Laptop Showcase</h1>
+      <p>Real-Time OBD-II Telemetry Streaming, BLE Handshake, ML Failure Prediction & DTC Triage</p>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      FASTAPI BACKEND CONNECTED
+    </div>
+  </div>
+
+  <!-- Stepper Bar -->
+  <div class="stepper">
+    <div class="step-pill" id="step1" onclick="showScreen(1)">1. Sign In (Auth)</div>
+    <div class="step-pill" id="step2" onclick="showScreen(2)">2. Pair BLE OBD-II</div>
+    <div class="step-pill" id="step3" onclick="showScreen(3)">3. Adapter Found & Vehicle</div>
+    <div class="step-pill active" id="step4" onclick="showScreen(4)">4. Home Dashboard & 9 Screens</div>
+  </div>
+
+  <div class="grid-container">
+    
+    <!-- Mobile App Interactive Phone Mockup Frame -->
+    <div class="phone-wrapper">
+      <div class="phone-screen">
+        <div class="phone-header">
+          <span style="font-weight:700; font-size: 14px;">9:41</span>
+          <span style="font-size: 12px; color: var(--green);" id="topStatus">● LIVE OBD</span>
+        </div>
+
+        <div class="phone-body">
+          
+          <!-- Screen 1: Sign In -->
+          <div class="phone-screen-section" id="screen1">
+            <div style="text-align: center; margin-top: 30px;">
+              <div style="width: 60px; height: 60px; background: rgba(108,92,231,0.2); border-radius: 16px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 28px;">🚗</div>
+              <h2 style="font-size: 22px; margin-top: 16px;">Welcome back</h2>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Sign in to your account</p>
+            </div>
+            <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+              <input type="text" value="alex.martinez@vehicle-triage.io" style="width: 100%; padding: 12px; background: #161922; border: 1px solid var(--border); border-radius: 10px; color: #fff; font-size: 13px;">
+              <input type="password" value="••••••••••••" style="width: 100%; padding: 12px; background: #161922; border: 1px solid var(--border); border-radius: 10px; color: #fff; font-size: 13px;">
+              <button onclick="showScreen(2)" style="width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 12px; color: #fff; font-weight: 700; cursor: pointer; font-size: 14px;">Sign In</button>
+            </div>
+          </div>
+
+          <!-- Screen 2: Pair BLE OBD-II -->
+          <div class="phone-screen-section" id="screen2">
+            <div style="text-align: center; margin-top: 40px;">
+              <div style="width: 100px; height: 100px; border-radius: 50%; background: rgba(108,92,231,0.15); border: 2px solid var(--accent); margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 40px;">📡</div>
+              <h3 style="font-size: 18px; margin-top: 20px;">Scanning for adapters...</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Searching for ELM327 / Vgate / Custom ESP32 BLE circuit...</p>
+              <button onclick="showScreen(3)" style="margin-top: 30px; padding: 12px 24px; background: var(--accent); border: none; border-radius: 10px; color: #fff; font-weight: 700; cursor: pointer;">Simulate Adapter Discovery</button>
+            </div>
+          </div>
+
+          <!-- Screen 3: Adapter Found -->
+          <div class="phone-screen-section" id="screen3">
+            <div style="text-align: center; margin-top: 10px;">
+              <span style="background: rgba(0,184,148,0.2); color: var(--green); padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 700;">ADAPTER FOUND</span>
+              <h3 style="font-size: 18px; margin-top: 10px;">ELM327 / Custom ESP32 OBD</h3>
+              <p style="font-size: 11px; color: var(--text-muted);">Signal -59 dBm • ISO 15765 CAN Bus</p>
+            </div>
+            <div class="card" style="margin-top: 10px;">
+              <span style="font-size: 10px; color: var(--text-muted); font-weight: 700;">DETECTED VEHICLE</span>
+              <h4 style="font-size: 14px; margin-top: 4px;">2021 Toyota Camry XSE</h4>
+              <p style="font-size: 11px; color: var(--text-muted);">VIN: 4T1BF3EK5AU123456</p>
+            </div>
+            <button onclick="showScreen(4)" style="width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 12px; color: #fff; font-weight: 700; cursor: pointer; font-size: 14px; margin-top: 10px;">Connect & Begin Monitoring</button>
+          </div>
+
+          <!-- Screen 4: Home Dashboard -->
+          <div class="phone-screen-section active" id="screen4">
+            <div class="card health-gauge-box">
+              <div class="gauge-circle" id="phoneGauge">
+                <span class="score" id="phoneScoreVal">87</span>
+                <span class="label">score</span>
+              </div>
+              <div>
+                <span style="background: rgba(0,184,148,0.2); color: var(--green); padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;" id="phoneScoreBadge">GOOD</span>
+                <h3 style="font-size: 15px; margin-top: 6px;">Toyota Camry XSE</h3>
+                <p style="font-size: 11px; color: var(--text-muted);">42,381 km</p>
+              </div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-tile">
+                <div class="label">Speed</div>
+                <div class="value" id="valSpeed">67 km/h</div>
+              </div>
+              <div class="metric-tile">
+                <div class="label">Engine RPM</div>
+                <div class="value" id="valRpm">3.2K</div>
+              </div>
+              <div class="metric-tile">
+                <div class="label">Coolant</div>
+                <div class="value" id="valCoolant">92°C</div>
+              </div>
+              <div class="metric-tile">
+                <div class="label">Fuel Trim</div>
+                <div class="value" id="valFuelTrim">+0.5%</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">ACTIVE FAULTS</span>
+              <div id="phoneAlertsList" style="margin-top: 8px;">
+                <div class="alert-card warning">
+                  <strong style="font-size: 13px;">Fuel System Lean (P0171)</strong>
+                  <p style="font-size: 11px; color: var(--text-muted);">Short-term trim +18.5%</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Interactive Diagnostics & Telemetry Dashboard -->
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="font-size: 16px; margin-bottom: 14px;">Live Diagnostics & Extended Sensor Bars</h3>
+        <div class="bar-group">
+          <div class="bar-item">
+            <div class="bar-label"><span>Throttle Position</span><span id="txtThrottle">45 %</span></div>
+            <div class="progress-track"><div class="progress-fill" id="fillThrottle" style="width: 45%;"></div></div>
+          </div>
+          <div class="bar-item">
+            <div class="bar-label"><span>Engine Load</span><span id="txtLoad">38 %</span></div>
+            <div class="progress-track"><div class="progress-fill" id="fillLoad" style="width: 38%; background: var(--accent-light);"></div></div>
+          </div>
+          <div class="bar-item">
+            <div class="bar-label"><span>Short-Term Fuel Trim</span><span id="txtTrim">+0.5 %</span></div>
+            <div class="progress-track"><div class="progress-fill" id="fillTrim" style="width: 50%; background: var(--green);"></div></div>
+          </div>
+          <div class="bar-item">
+            <div class="bar-label"><span>System Voltage</span><span id="txtVolt">13.8 V</span></div>
+            <div class="progress-track"><div class="progress-fill" id="fillVolt" style="width: 75%; background: var(--yellow);"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size: 16px; margin-bottom: 14px;">ML Inference Results (HistGradientBoosting)</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div style="background: var(--bg); padding: 14px; border-radius: 12px;">
+            <span style="font-size: 11px; color: var(--accent-light); font-weight: 700;">ESTIMATED RUL</span>
+            <h2 id="txtRul" style="font-size: 24px; margin-top: 4px;">1,200 Hrs</h2>
+          </div>
+          <div style="background: var(--bg); padding: 14px; border-radius: 12px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">FAILURE RISK %</span>
+            <h2 id="txtProb" style="font-size: 24px; color: var(--green); margin-top: 4px;">4.2%</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Controls & Emergency SOS Simulation Panel -->
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">OBD-II Fault Simulator</h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Click to inject live sensor fault scenarios into backend ML model:</p>
+        
+        <button class="scenario-btn active" onclick="setScenario(0, this)">1. Normal Riding (Score: 87)</button>
+        <button class="scenario-btn" onclick="setScenario(1, this)">2. Engine Overheating (P0217)</button>
+        <button class="scenario-btn" onclick="setScenario(2, this)">3. Fuel Misfire / Lean (P0171)</button>
+        <button class="scenario-btn" onclick="setScenario(3, this)">4. Battery Voltage Drop (P0562)</button>
+      </div>
+
+      <div class="card" style="text-align: center;">
+        <h3 style="font-size: 16px;">Emergency SOS</h3>
+        <p style="font-size: 11px; color: var(--text-muted);">Hold to broadcast GPS location</p>
+        <div class="sos-btn" id="sosBtn">SOS</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let baseRpm = 3200;
+    let baseCoolant = 88;
+    let baseSpeed = 67;
+    let baseTrim = 0.5;
+    let baseVolt = 13.8;
+    let activeScenario = 0;
+
+    function showScreen(step) {
+      document.querySelectorAll('.step-pill').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.phone-screen-section').forEach(s => s.classList.remove('active'));
+
+      document.getElementById('step' + step).classList.add('active');
+      document.getElementById('screen' + step).classList.add('active');
+    }
+
+    function setScenario(scen, btn) {
+      activeScenario = scen;
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (scen === 0) {
+        baseCoolant = 88; baseTrim = 0.5; baseVolt = 13.8;
+      } else if (scen === 1) {
+        baseCoolant = 118; baseTrim = 2.0; baseVolt = 13.2;
+      } else if (scen === 2) {
+        baseCoolant = 94; baseTrim = 18.5; baseVolt = 13.6;
+      } else if (scen === 3) {
+        baseCoolant = 85; baseTrim = -2.0; baseVolt = 10.8;
+      }
+      updateUI();
+    }
+
+    function updateUI() {
+      let rpm = Math.round(baseRpm + (Math.random() * 200 - 100));
+      let coolant = Math.round(baseCoolant + (Math.random() * 2 - 1));
+      let speed = Math.max(0, Math.round(baseSpeed + (Math.random() * 4 - 2)));
+      let trim = (baseTrim + (Math.random() * 0.4 - 0.2)).toFixed(1);
+      let volt = (baseVolt + (Math.random() * 0.1 - 0.05)).toFixed(1);
+      let throttle = Math.min(100, Math.max(10, Math.round((speed / 140) * 100)));
+      let load = Math.min(100, Math.max(10, Math.round((rpm / 8000) * 100)));
+
+      document.getElementById('valRpm').innerText = (rpm / 1000).toFixed(1) + 'K';
+      document.getElementById('valCoolant').innerText = coolant + '°C';
+      document.getElementById('valSpeed').innerText = speed + ' km/h';
+      document.getElementById('valFuelTrim').innerText = (trim > 0 ? '+' : '') + trim + '%';
+
+      document.getElementById('txtThrottle').innerText = throttle + ' %';
+      document.getElementById('fillThrottle').style.width = throttle + '%';
+      document.getElementById('txtLoad').innerText = load + ' %';
+      document.getElementById('fillLoad').style.width = load + '%';
+      document.getElementById('txtTrim').innerText = (trim > 0 ? '+' : '') + trim + ' %';
+      document.getElementById('txtVolt').innerText = volt + ' V';
+      document.getElementById('fillVolt').style.width = Math.max(0, Math.min(100, (volt - 9) / 6 * 100)) + '%';
+
+      let score = 87;
+      let badge = 'GOOD';
+      let color = 'var(--green)';
+      let prob = '4.2%';
+      let rul = '1,200 Hrs';
+      let alertHtml = '';
+
+      if (activeScenario === 1) {
+        score = 42; badge = 'CRITICAL'; color = 'var(--red)'; prob = '88.5%'; rul = '24 Hrs';
+        alertHtml = `<div class="alert-card"><strong style="font-size: 13px;">Engine Coolant Over Temp (P0217)</strong><p style="font-size: 11px; color: var(--text-muted);">Coolant reached ${coolant}°C</p></div>`;
+      } else if (activeScenario === 2) {
+        score = 68; badge = 'WARNING'; color = 'var(--yellow)'; prob = '65.2%'; rul = '110 Hrs';
+        alertHtml = `<div class="alert-card warning"><strong style="font-size: 13px;">Fuel System Lean (P0171)</strong><p style="font-size: 11px; color: var(--text-muted);">Fuel trim +${trim}%</p></div>`;
+      } else if (activeScenario === 3) {
+        score = 61; badge = 'WARNING'; color = 'var(--yellow)'; prob = '72.0%'; rul = '65 Hrs';
+        alertHtml = `<div class="alert-card warning"><strong style="font-size: 13px;">System Voltage Low (P0562)</strong><p style="font-size: 11px; color: var(--text-muted);">Battery dropped to ${volt}V</p></div>`;
+      } else {
+        alertHtml = `<div style="font-size: 12px; color: var(--green);">● All systems nominal</div>`;
+      }
+
+      document.getElementById('phoneScoreVal').innerText = score;
+      document.getElementById('phoneScoreBadge').innerText = badge;
+      document.getElementById('phoneScoreBadge').style.color = color;
+      document.getElementById('phoneGauge').style.borderTopColor = color;
+      document.getElementById('phoneGauge').style.borderRightColor = color;
+      document.getElementById('phoneAlertsList').innerHTML = alertHtml;
+      document.getElementById('txtProb').innerText = prob;
+      document.getElementById('txtProb').style.color = color;
+      document.getElementById('txtRul').innerText = rul;
+    }
+
+    setInterval(updateUI, 2000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+backend/data/*.csv
+
+# Models (Keep binaries ignored or managed via Git LFS)
+# backend/models/*.joblib
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+mobile_app/build/
+mobile_app/.packages
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+
+# Environment & Credentials
+.env
+.env.local
+*.pem
+*.key
+
+# Virtual Environments & Packages
+.venv/
+node_modules/
+
+# Binaries & APKs
+*.apk
+*.aab
+
+# Temporary & search files
+flutter_search.txt
+winget_search.txt
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
