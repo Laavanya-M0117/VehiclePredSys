@@ -11,8 +11,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Python build artifacts
+# (Do not ignore lib/ as Flutter app source code resides in mobile_app/lib/)
 parts/
 sdist/
 var/
