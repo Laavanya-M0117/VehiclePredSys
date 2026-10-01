@@ -8,11 +8,14 @@ class DatabaseService {
   DatabaseService._internal();
 
   Database? _db;
+  final Map<String, Map<String, dynamic>> _webUserDevices = {};
+  final List<Map<String, dynamic>> _webTelemetryLogs = [];
 
-  Future<Database> get database async {
+  Future<Database?> get database async {
+    if (kIsWeb) return null;
     if (_db != null) return _db!;
     _db = await _initDatabase();
-    return _db!;
+    return _db;
   }
 
   Future<Database> _initDatabase() async {
@@ -84,8 +87,24 @@ class DatabaseService {
     int? odometerKm,
     String? subscriptionTier,
   }) async {
+    if (kIsWeb) {
+      _webUserDevices[deviceId] = {
+        'device_id': deviceId,
+        'user_identifier': userIdentifier,
+        'display_name': displayName ?? 'VETRI Driver',
+        'email': email ?? '',
+        'phone': phone ?? '',
+        'vehicle_name': vehicleName ?? 'Royal Enfield Classic 350',
+        'vehicle_vin': vehicleVin ?? 'ME3J350CAN2026VIN',
+        'odometer_km': odometerKm ?? 14250,
+        'subscription_tier': subscriptionTier ?? 'PRO PLAN',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      return;
+    }
     try {
       final db = await database;
+      if (db == null) return;
       await db.insert(
         'user_devices',
         {
@@ -94,22 +113,26 @@ class DatabaseService {
           'display_name': displayName ?? 'VETRI Driver',
           'email': email ?? '',
           'phone': phone ?? '',
-          'vehicle_name': vehicleName ?? 'KTM Duke 390',
-          'vehicle_vin': vehicleVin ?? 'MD2A1234567890VIN',
+          'vehicle_name': vehicleName ?? 'Royal Enfield Classic 350',
+          'vehicle_vin': vehicleVin ?? 'ME3J350CAN2026VIN',
           'odometer_km': odometerKm ?? 14250,
-          'subscription_tier': subscriptionTier ?? '1-MONTH STARTER',
+          'subscription_tier': subscriptionTier ?? 'PRO PLAN',
           'created_at': DateTime.now().toIso8601String(),
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
-      debugPrint('Database bindDeviceUser fallback: ');
+      debugPrint('Database bindDeviceUser fallback: $e');
     }
   }
 
   Future<Map<String, dynamic>?> getDeviceBinding(String deviceId) async {
+    if (kIsWeb) {
+      return _webUserDevices[deviceId];
+    }
     try {
       final db = await database;
+      if (db == null) return null;
       final results = await db.query(
         'user_devices',
         where: 'device_id = ?',
@@ -120,7 +143,7 @@ class DatabaseService {
         return results.first;
       }
     } catch (e) {
-      debugPrint('Database getDeviceBinding error: ');
+      debugPrint('Database getDeviceBinding error: $e');
     }
     return null;
   }
@@ -135,8 +158,21 @@ class DatabaseService {
     int? odometerKm,
     String? subscriptionTier,
   }) async {
+    if (kIsWeb) {
+      final existing = _webUserDevices[deviceId] ?? {};
+      if (displayName != null) existing['display_name'] = displayName;
+      if (email != null) existing['email'] = email;
+      if (phone != null) existing['phone'] = phone;
+      if (vehicleName != null) existing['vehicle_name'] = vehicleName;
+      if (vehicleVin != null) existing['vehicle_vin'] = vehicleVin;
+      if (odometerKm != null) existing['odometer_km'] = odometerKm;
+      if (subscriptionTier != null) existing['subscription_tier'] = subscriptionTier;
+      _webUserDevices[deviceId] = existing;
+      return;
+    }
     try {
       final db = await database;
+      if (db == null) return;
       final Map<String, dynamic> values = {};
       if (displayName != null) values['display_name'] = displayName;
       if (email != null) values['email'] = email;
@@ -155,7 +191,7 @@ class DatabaseService {
         );
       }
     } catch (e) {
-      debugPrint('Database updateStoredProfile error: ');
+      debugPrint('Database updateStoredProfile error: $e');
     }
   }
 
@@ -173,31 +209,44 @@ class DatabaseService {
     required double failureProbability,
     int maxRowsToRetain = 5000,
   }) async {
+    final entry = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'rpm': rpm,
+      'speed': speed,
+      'coolant_temp': coolantTemp,
+      'battery_voltage': batteryVoltage,
+      'fuel_trim': fuelTrim,
+      'triage_level': triageLevel,
+      'failure_probability': failureProbability,
+    };
+
+    if (kIsWeb) {
+      _webTelemetryLogs.insert(0, entry);
+      if (_webTelemetryLogs.length > maxRowsToRetain) {
+        _webTelemetryLogs.removeRange(maxRowsToRetain, _webTelemetryLogs.length);
+      }
+      return;
+    }
+
     try {
       final db = await database;
-      await db.insert('telemetry_logs', {
-        'timestamp': DateTime.now().toIso8601String(),
-        'rpm': rpm,
-        'speed': speed,
-        'coolant_temp': coolantTemp,
-        'battery_voltage': batteryVoltage,
-        'fuel_trim': fuelTrim,
-        'triage_level': triageLevel,
-        'failure_probability': failureProbability,
-      });
+      if (db == null) return;
+      await db.insert('telemetry_logs', entry);
 
       // Periodic FIFO pruning
       if (DateTime.now().second % 15 == 0) {
         await pruneOldestTelemetry(maxRowsToRetain);
       }
     } catch (e) {
-      debugPrint('Database insertTelemetryPoint fallback: ');
+      debugPrint('Database insertTelemetryPoint fallback: $e');
     }
   }
 
   Future<void> pruneOldestTelemetry(int maxRetainedRows) async {
+    if (kIsWeb) return;
     try {
       final db = await database;
+      if (db == null) return;
       await db.rawDelete('''
         DELETE FROM telemetry_logs 
         WHERE id NOT IN (
@@ -207,20 +256,24 @@ class DatabaseService {
         )
       ''', [maxRetainedRows]);
     } catch (e) {
-      debugPrint('FIFO Pruning error: ');
+      debugPrint('FIFO Pruning error: $e');
     }
   }
 
   Future<List<Map<String, dynamic>>> getRecentTelemetryLogs({int limit = 50}) async {
+    if (kIsWeb) {
+      return _webTelemetryLogs.take(limit).toList();
+    }
     try {
       final db = await database;
+      if (db == null) return [];
       return await db.query(
         'telemetry_logs',
         orderBy: 'id DESC',
         limit: limit,
       );
     } catch (e) {
-      debugPrint('Database getRecentTelemetryLogs error: ');
+      debugPrint('Database getRecentTelemetryLogs error: $e');
       return [];
     }
   }
