@@ -50,6 +50,7 @@ node_modules/
 # Binaries & APKs
 *.apk
 *.aab
+cloudflared.exe
 
 # Temporary & search files
 flutter_search.txt
