@@ -377,7 +377,10 @@ def lookup_dtc_code(code: str, user: Dict[str, Any] = Depends(verify_jwt_token))
 
 # Mount Flutter Web App as unified single-port frontend (serves PWA, assets, and summary PDF)
 from fastapi.staticfiles import StaticFiles
-WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "mobile_app", "build", "web"))
+WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web_dist"))
+if not os.path.exists(WEB_DIR):
+    WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "mobile_app", "build", "web"))
+
 if os.path.exists(WEB_DIR):
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web_app")
 
