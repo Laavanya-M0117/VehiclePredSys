@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-VETRI - Real-Time CAN Bus to AI Bridge & Diagnostic Analyzer
-============================================================
-Decodes raw CAN frames (bits & bytes) from ESP32 / Arduino MCP2515 hardware,
+VETRI - Arduino Nano + MCP2515 Real-Time CAN Bus to AI Bridge & Diagnostic Analyzer
+===================================================================================
+Decodes raw CAN frames (bits & bytes) from Arduino Nano + MCP2515 hardware,
 converts them into physics-calibrated vehicle parameters, runs real-time
 machine learning failure prediction (Triage, Failure Probability, RUL),
 and logs telemetry to CSV.
 
 Hardware Specifications (Royal Enfield Classic 350 J-Series):
-  - Transmitter: Arduino Nano + MCP2515 CAN Bus Controller (SPI)
-  - Receiver: ESP32 + SN65HVD230 / MCP2515
-  - Baud Rate: 500 kbps (CAN Bus), 115200 (UART Serial)
+  - Hardware: Arduino Nano (ATmega328P) + MCP2515 CAN Bus Controller (SPI)
+  - Connection: USB Serial to PC / Laptop (COM Port, 115200 baud)
+  - CAN Baud: 500 kbps (Standard ISO 11898), 8 MHz Crystal
   - Broadcast Frame: CAN ID 0x123 (4 bytes)
       Byte 0: (RPM >> 8) & 0xFF  [RPM High Byte]
       Byte 1: RPM & 0xFF         [RPM Low Byte]
@@ -340,8 +340,8 @@ class RealTimeAITriageBridge:
             print(f"[Auto-Detect] Using Serial Port: {port}")
 
         print(f"=================================================================")
-        print(f" VETRI LIVE CAN BUS -> AI PREDICTIVE BRIDGE (Port: {port})")
-        print(f" Baud: {self.baud} | Output Log: {self.log_file}")
+        print(f" VETRI ARDUINO NANO + MCP2515 CAN BUS -> AI PREDICTIVE BRIDGE")
+        print(f" Port: {port} | Baud: {self.baud} | Output Log: {self.log_file}")
         print(f" Listening for CAN ID 0x123 frames & CSV telemetry stream...")
         print(f"=================================================================\n")
 

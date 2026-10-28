@@ -55,6 +55,7 @@ cloudflared.exe
 # Temporary & search files
 flutter_search.txt
 winget_search.txt
+scratch_pdf_text.txt
 *.log
 
 # IDEs
