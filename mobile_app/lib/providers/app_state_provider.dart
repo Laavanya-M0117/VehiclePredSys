@@ -755,10 +755,81 @@ class AppStateProvider with ChangeNotifier {
           }
         }
       }
-      // Format C: Raw CAN CSV Frame (e.g. 1702,0x7E8,8,04,41,0C,1A,F8,00,00,00)
-      else if (clean.contains(',')) {
+      // Format C: ESP32 + MCP2515 CAN Frame (CSV or raw hex)
+      else if (clean.startsWith('CSV,') || clean.contains('0x123') || clean.contains(',')) {
         final parts = clean.split(',');
-        if (parts.length >= 7) {
+
+        // C.1: VETRI Diagnostic Frame: CSV,<millis>,<CAN_ID>,<DLC>,<RPM>,<Temp>,<Status>
+        // Example: CSV,45123,0x123,4,3200,87,0x01 (or without CSV prefix: 45123,0x123,4,3200,87,0x01)
+        int idIdx = -1;
+        if (parts.length >= 7 && parts[0].trim().toUpperCase() == 'CSV') {
+          idIdx = 2;
+        } else if (parts.length >= 6 && parts[1].trim().toLowerCase().contains('123')) {
+          idIdx = 1;
+        }
+
+        if (idIdx != -1) {
+          final idStr = parts[idIdx].trim().toLowerCase();
+          if (idStr.contains('123')) {
+            final rpmVal = double.tryParse(parts[idIdx + 2].trim());
+            final tempVal = double.tryParse(parts[idIdx + 3].trim());
+
+            // Parse status byte (hex like 0x01 or decimal integer like 1)
+            String statusRaw = parts[idIdx + 4].trim();
+            int statusByte = 0;
+            if (statusRaw.toLowerCase().startsWith('0x')) {
+              statusByte = int.tryParse(statusRaw.substring(2), radix: 16) ?? 0;
+            } else {
+              statusByte = int.tryParse(statusRaw) ?? 0;
+            }
+
+            if (rpmVal != null) _rpm = rpmVal;
+            if (tempVal != null) {
+              _coolantTemp = tempVal;
+              _eot = tempVal;
+            }
+
+            // Decode Status Byte Bitflags (Section 3 of Technical Guide)
+            // Bit 0: Engine Running (1=Running, 0=Stopped)
+            final bool engineRunning = (statusByte & 0x01) != 0;
+            if (!engineRunning && _rpm < 400.0) {
+              _rpm = 0.0;
+              _speed = 0.0;
+              _gear = 'N';
+            }
+
+            // Bit 1: Overheating Warning (>105°C) -> DTC P0217
+            if ((statusByte & 0x02) != 0 || _coolantTemp > 105.0) {
+              injectDemoFault('P0217', 'Engine Coolant Over Temperature Condition', 'HIGH');
+            }
+
+            // Bit 2: Lean Misfire / Intake Leak -> DTC P0171
+            if ((statusByte & 0x04) != 0) {
+              injectDemoFault('P0171', 'System Too Lean / Intake Leak Detected', 'MEDIUM');
+              _fuelTrim = 22.5;
+            }
+
+            // Bit 3: Battery / Voltage Anomaly -> DTC P0562
+            if ((statusByte & 0x08) != 0) {
+              injectDemoFault('P0562', 'System Low Battery Voltage Condition', 'HIGH');
+              _batteryVoltage = 11.2;
+            } else {
+              _batteryVoltage = 14.1;
+            }
+
+            // Estimate Physics Proxies for Full 19-Parameter ML Pipeline
+            if (_rpm > 400.0) {
+              _tps = ((_rpm - 1050.0) / 4500.0 * 50.0 + 2.1).clamp(2.1, 90.0);
+              _mapKpa = (34.0 + (_tps * 0.55)).clamp(30.0, 95.0);
+              if (_speed <= 0.0 && _rpm > 1800.0) {
+                _gear = '2';
+                _speed = _rpm / 75.0; // using J-series gear ratio
+              }
+            }
+          }
+        }
+        // C.2: Standard OBD-II Mode 01 CSV Frame (e.g. 1702,0x7E8,8,04,41,0C,1A,F8,00,00,00)
+        else if (parts.length >= 7) {
           final id = parts[1].trim().toLowerCase();
           if (id.contains('7e8') || id.contains('201') || id.contains('7e0')) {
             final p1 = parts[3].trim().toUpperCase();
@@ -768,6 +839,30 @@ class AppStateProvider with ChangeNotifier {
               final b = int.tryParse(parts[6].trim(), radix: 16) ?? 0;
               _rpm = ((a * 256) + b) / 4.0;
             }
+          }
+        }
+      }
+      // Format D: Raw CAN Sniff print (e.g. "CAN 123 [4] 0C 80 57 01")
+      else if (clean.startsWith('CAN ') && clean.contains('[')) {
+        final tokens = clean.split(RegExp(r'\s+'));
+        if (tokens.length >= 7 && tokens[1].toUpperCase().contains('123')) {
+          final b0 = int.tryParse(tokens[3], radix: 16) ?? 0;
+          final b1 = int.tryParse(tokens[4], radix: 16) ?? 0;
+          final b2 = int.tryParse(tokens[5], radix: 16) ?? 0;
+          final b3 = int.tryParse(tokens[6], radix: 16) ?? 0;
+
+          _rpm = ((b0 << 8) | b1).toDouble();
+          _coolantTemp = b2.toDouble();
+          _eot = _coolantTemp;
+
+          if ((b3 & 0x02) != 0) injectDemoFault('P0217', 'Engine Coolant Over Temperature Condition', 'HIGH');
+          if ((b3 & 0x04) != 0) {
+            injectDemoFault('P0171', 'System Too Lean / Intake Leak Detected', 'MEDIUM');
+            _fuelTrim = 22.5;
+          }
+          if ((b3 & 0x08) != 0) {
+            injectDemoFault('P0562', 'System Low Battery Voltage Condition', 'HIGH');
+            _batteryVoltage = 11.2;
           }
         }
       }
