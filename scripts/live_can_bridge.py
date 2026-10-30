@@ -72,7 +72,9 @@ class CANBitByteDecoder:
         if len(data) < 4:
             return None
 
-        rpm = (data[0] << 8) | data[1]
+        rpm_be = (data[0] << 8) | data[1]
+        rpm_le = (data[1] << 8) | data[0]
+        rpm = rpm_be if rpm_be <= 12000 else (rpm_le if rpm_le <= 12000 else rpm_be)
         temp = float(data[2])
         status = data[3]
 

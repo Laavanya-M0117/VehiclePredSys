@@ -851,7 +851,9 @@ class AppStateProvider with ChangeNotifier {
           final b2 = int.tryParse(tokens[5], radix: 16) ?? 0;
           final b3 = int.tryParse(tokens[6], radix: 16) ?? 0;
 
-          _rpm = ((b0 << 8) | b1).toDouble();
+          final int rpmBe = (b0 << 8) | b1;
+          final int rpmLe = (b1 << 8) | b0;
+          _rpm = (rpmBe <= 12000 ? rpmBe : (rpmLe <= 12000 ? rpmLe : rpmBe)).toDouble();
           _coolantTemp = b2.toDouble();
           _eot = _coolantTemp;
 
