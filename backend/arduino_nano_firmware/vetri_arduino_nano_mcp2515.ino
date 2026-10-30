@@ -101,8 +101,8 @@ void resetCAN() {
   }
 }
 
-uint8_t readTEC() { return mcp2515.readRegister(MCP_TEC); }
-uint8_t readREC() { return mcp2515.readRegister(MCP_REC); }
+uint8_t readTEC() { return mcp2515.errorCountTX(); }
+uint8_t readREC() { return mcp2515.errorCountRX(); }
 
 // ======================== INCOMING COMMAND HANDLER ========================
 void processCommand(String cmd) {
@@ -234,7 +234,7 @@ void loop() {
           tx.data[1] = vehicle_rpm & 0xFF;        // Low byte
           tx.data[2] = vehicle_temp;
           tx.data[3] = status_byte;
-          mcp2515.sendMessage(MCP2515::TXB0, &tx);
+          mcp2515.sendMessage(&tx);
         }
       }
     }
