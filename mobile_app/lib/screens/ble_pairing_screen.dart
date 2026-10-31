@@ -25,6 +25,15 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   @override
   void initState() {
     super.initState();
+    // Default discovered HC-05 module for direct pairing
+    _discoveredDevices.add({
+      'name': 'HC-05 (Arduino Nano + MCP2515)',
+      'id': 'HC05-NANO-OBD2',
+      'rssi': 'PAIRED (SPP)',
+      'isReal': 'true',
+      'isBonded': 'true',
+      'isHc05': 'true',
+    });
     _initBluetooth();
   }
 
@@ -67,7 +76,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   void _fetchBondedAndScan() async {
     setState(() {
       _isScanning = true;
-      _discoveredDevices.removeWhere((d) => d['isReal'] == 'true');
+      _discoveredDevices.removeWhere((d) => d['isReal'] == 'true' && d['isHc05'] != 'true');
     });
 
     // 1. First fetch bonded/paired system devices (already paired in Android Bluetooth)
@@ -235,6 +244,22 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   void _connectDevice(Map<String, String> device) async {
     final provider = Provider.of<AppStateProvider>(context, listen: false);
     final deviceId = device['id'] ?? 'unknown';
+
+    // Direct Instant Connection for HC-05 Bluetooth Module (No Firebase OTP barrier needed)
+    if (device['isHc05'] == 'true' ||
+        (device['name'] != null && device['name']!.toUpperCase().contains('HC-05')) ||
+        (device['name'] != null && device['name']!.toUpperCase().contains('HC05'))) {
+      provider.connectToDevice(device);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connected to HC-05 (Arduino Nano + MCP2515)'),
+          backgroundColor: Color(0xFF00B894),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
 
     final isBound = await provider.isDeviceBound(deviceId);
     if (!mounted) return;

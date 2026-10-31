@@ -323,57 +323,178 @@ class HomeDashboardScreen extends StatelessWidget {
                 const SizedBox(height: 16),
               ],
 
-              // Speed Trail Animated Card
-              VehicleSpeedAnimation(
-                speed: provider.speed,
-                isMotorcycle: provider.vehicleName.toLowerCase().contains('bike') ||
-                    provider.vehicleName.toLowerCase().contains('ktm') ||
-                    provider.vehicleName.toLowerCase().contains('motorcycle'),
+              // =======================================================
+              // 1. COMPACT LIVE TELEMETRY CHIPS (Small Icons, Just Enough to be Seen)
+              // =======================================================
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'LIVE SENSOR TELEMETRY',
+                    style: TextStyle(
+                      color: Color(0xFF8E92A4),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: provider.rpm > 0
+                          ? const Color(0xFF00B894).withValues(alpha: 0.15)
+                          : const Color(0xFFFDCB6E).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: provider.rpm > 0 ? const Color(0xFF00B894) : const Color(0xFFFDCB6E),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          provider.rpm > 0 ? 'STREAMING' : 'STANDBY',
+                          style: TextStyle(
+                            color: provider.rpm > 0 ? const Color(0xFF00B894) : const Color(0xFFFDCB6E),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
-              // Glowing Vehicle Health Card
+              // Compact 6-Metric Horizontal Wrap Grid
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161922),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF232736)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildCompactChip(
+                      icon: Icons.speed_rounded,
+                      label: 'SPEED',
+                      val: '${provider.speed.toStringAsFixed(0)}',
+                      unit: 'km/h',
+                      color: const Color(0xFF00B894),
+                    ),
+                    _buildCompactChip(
+                      icon: Icons.rotate_right_rounded,
+                      label: 'RPM',
+                      val: '${provider.rpm.toInt()}',
+                      unit: 'rpm',
+                      color: const Color(0xFF6C5CE7),
+                    ),
+                    _buildCompactChip(
+                      icon: Icons.thermostat_rounded,
+                      label: 'TEMP',
+                      val: provider.coolantTemp > 0 ? '${provider.coolantTemp.toStringAsFixed(0)}' : '--',
+                      unit: '°C',
+                      color: provider.coolantTemp > 105 ? const Color(0xFFFF7675) : const Color(0xFF00B894),
+                    ),
+                    _buildCompactChip(
+                      icon: Icons.bolt_rounded,
+                      label: 'BATTERY',
+                      val: provider.batteryVoltage > 0 ? provider.batteryVoltage.toStringAsFixed(1) : '--',
+                      unit: 'V',
+                      color: const Color(0xFFFDCB6E),
+                    ),
+                    _buildCompactChip(
+                      icon: Icons.local_gas_station_rounded,
+                      label: 'STFT',
+                      val: '${provider.fuelTrim >= 0 ? "+" : ""}${provider.fuelTrim.toStringAsFixed(1)}',
+                      unit: '%',
+                      color: const Color(0xFFA29BFE),
+                    ),
+                    _buildCompactChip(
+                      icon: Icons.tune_rounded,
+                      label: 'TPS',
+                      val: '${provider.tps.toStringAsFixed(0)}',
+                      unit: '%',
+                      color: const Color(0xFF74B9FF),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // =======================================================
+              // 2. PART 1: REAL-TIME TELEMETRY AI DIAGNOSTIC TRIAGE (HERO CARD)
+              // =======================================================
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       const Color(0xFF161922),
-                      triageColor.withValues(alpha: 0.1),
+                      triageColor.withValues(alpha: 0.12),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: triageColor.withValues(alpha: 0.4), width: 1.5),
+                  border: Border.all(color: triageColor.withValues(alpha: 0.45), width: 1.5),
                   boxShadow: [
                     BoxShadow(
-                      color: triageColor.withValues(alpha: 0.15),
-                      blurRadius: 20,
+                      color: triageColor.withValues(alpha: 0.18),
+                      blurRadius: 22,
                       spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
                           children: [
-                            const Text('OVERALL VEHICLE HEALTH',
-                                style: TextStyle(
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: triageColor.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.auto_awesome_rounded, color: triageColor, size: 16),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PART 1: REAL-TIME AI DIAGNOSTIC TRIAGE',
+                                  style: TextStyle(
                                     color: Color(0xFF8E92A4),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              triage == 'LOW'
-                                  ? 'Optimal Condition'
-                                  : (triage == 'MEDIUM' ? 'Check Advised' : 'Attention Needed'),
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  triage == 'LOW'
+                                      ? 'Nominal J-Series Operation'
+                                      : (triage == 'MEDIUM' ? 'Early Anomaly Detected' : 'Critical Fault Condition'),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -386,56 +507,121 @@ class HomeDashboardScreen extends StatelessWidget {
                           child: Text(
                             '$triage RISK',
                             style: TextStyle(
-                                color: triageColor, fontWeight: FontWeight.bold, fontSize: 12),
+                              color: triageColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    // Health Ring
-                    Center(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 140,
-                            height: 140,
-                            child: CircularProgressIndicator(
-                              value: score / 100.0,
-                              strokeWidth: 12,
-                              backgroundColor: const Color(0xFF232736),
-                              valueColor: AlwaysStoppedAnimation<Color>(triageColor),
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$score',
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 38, fontWeight: FontWeight.bold),
+                    const SizedBox(height: 18),
+
+                    // Health Dial & Probability
+                    Row(
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              height: 100,
+                              child: CircularProgressIndicator(
+                                value: score / 100.0,
+                                strokeWidth: 10,
+                                backgroundColor: const Color(0xFF232736),
+                                valueColor: AlwaysStoppedAnimation<Color>(triageColor),
                               ),
-                              const Text('/ 100',
-                                  style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '$score',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  'VHI SCORE',
+                                  style: TextStyle(color: Color(0xFF8E92A4), fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text('Failure Probability: ',
+                                      style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                                  Text(
+                                    '${(provider.failureProbability * 100).toStringAsFixed(1)}%',
+                                    style: TextStyle(
+                                      color: triageColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Text('Estimated RUL: ',
+                                      style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                                  Text(
+                                    '${provider.remainingUsefulLifeHours.toStringAsFixed(0)} hrs',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF6C5CE7).withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      provider.predictedFaultClass.replaceAll('_', ' '),
+                                      style: const TextStyle(
+                                        color: Color(0xFFA29BFE),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    provider.modelVersion,
+                                    style: const TextStyle(color: Color(0xFF5A5E73), fontSize: 10),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'Failure Probability: ${(provider.failureProbability * 100).toStringAsFixed(1)}%  •  Estimated RUL: ${provider.remainingUsefulLifeHours.toStringAsFixed(1)} hrs',
-                      style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 12),
-                    ),
-                    const SizedBox(height: 14),
-                    // Diagnostic Explanation Banner
+
+                    // Explainable Diagnostic Reasoning Box
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: triageColor.withValues(alpha: 0.12),
+                        color: const Color(0xFF0D0E15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: triageColor.withValues(alpha: 0.3)),
+                        border: Border.all(color: triageColor.withValues(alpha: 0.25)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,29 +631,28 @@ class HomeDashboardScreen extends StatelessWidget {
                               Icon(
                                 triage == 'LOW' ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded,
                                 color: triageColor,
-                                size: 16,
+                                size: 15,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                provider.predictedFaultClass.replaceAll('_', ' '),
+                              const Text(
+                                'REAL-TIME DIAGNOSTIC REASONING',
                                 style: TextStyle(
-                                  color: triageColor,
+                                  color: Color(0xFF8E92A4),
+                                  fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 11,
                                   letterSpacing: 0.8,
                                 ),
                               ),
-                              const Spacer(),
-                              Text(
-                                provider.modelVersion,
-                                style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 10),
-                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             provider.diagnosticExplanation,
-                            style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 12, height: 1.3),
+                            style: const TextStyle(
+                              color: Color(0xFFE2E8F0),
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
                           ),
                         ],
                       ),
@@ -477,56 +662,116 @@ class HomeDashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // Live Sensor Tiles Grid
-              const Text(
-                'LIVE TELEMETRY READINGS',
-                style: TextStyle(
-                    color: Color(0xFF8E92A4),
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1),
-              ),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.45,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+              // =======================================================
+              // 3. PART 2: 5-DAY HISTORICAL DRIVING TREND & PROGNOSTICS
+              // =======================================================
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildMetricTile(
-                    title: 'Engine RPM',
-                    value: provider.rpm.toInt().toString(),
-                    unit: 'RPM',
-                    icon: Icons.speed_rounded,
-                    color: const Color(0xFF6C5CE7),
-                  ),
-                  _buildMetricTile(
-                    title: 'Coolant Temp',
-                    value: provider.coolantTemp.toStringAsFixed(1),
-                    unit: '°C',
-                    icon: Icons.thermostat_rounded,
-                    color: provider.coolantTemp > 105
-                        ? const Color(0xFFFF7675)
-                        : const Color(0xFF00B894),
-                  ),
-                  _buildMetricTile(
-                    title: 'Battery Voltage',
-                    value: provider.batteryVoltage.toStringAsFixed(2),
-                    unit: 'V',
-                    icon: Icons.bolt_rounded,
-                    color: const Color(0xFFFDCB6E),
-                  ),
-                  _buildMetricTile(
-                    title: 'Fuel Trim (STFT)',
-                    value:
-                        '${provider.fuelTrim >= 0 ? '+' : ''}${provider.fuelTrim.toStringAsFixed(1)}',
-                    unit: '%',
-                    icon: Icons.local_gas_station_rounded,
-                    color: const Color(0xFFA29BFE),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00B894).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.history_toggle_off_rounded, color: Color(0xFF00B894), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'PART 2: 5-DAY DRIVING TREND & PROGNOSTICS',
+                        style: TextStyle(
+                          color: Color(0xFF8E92A4),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF00B894).withValues(alpha: 0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Driving Pattern Summary
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0E15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF232736)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.route_rounded, color: Color(0xFF00B894), size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              provider.history5DayDrivingSummary,
+                              style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 11.5, height: 1.35),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Component 1: Engine Oil Viscosity & Degradation
+                    _buildAiComponentRow(
+                      context,
+                      title: 'Engine Oil Viscosity & Thermal Breakdown',
+                      healthPct: provider.historyOilLifePercent.toInt(),
+                      statusText: provider.historyOilRecommendation,
+                      icon: Icons.oil_barrel_rounded,
+                      color: const Color(0xFF00B894),
+                    ),
+                    const Divider(color: Color(0xFF232736), height: 20),
+
+                    // Component 2: Battery Starter & Cranking Health
+                    _buildAiComponentRow(
+                      context,
+                      title: 'Battery Cranking & Alternator Stator Health',
+                      healthPct: provider.historyBatteryCrankHealth.toInt(),
+                      statusText: provider.historyBatteryRecommendation,
+                      icon: Icons.bolt_rounded,
+                      color: const Color(0xFFFDCB6E),
+                    ),
+                    const Divider(color: Color(0xFF232736), height: 20),
+
+                    // Component 3: Clutch & Transmission Strain
+                    _buildAiComponentRow(
+                      context,
+                      title: 'Clutch Friction & Gearbox Engagement',
+                      healthPct: provider.historyClutchTransmissionHealth.toInt(),
+                      statusText: provider.historyClutchRecommendation,
+                      icon: Icons.settings_rounded,
+                      color: const Color(0xFFA29BFE),
+                    ),
+                    const Divider(color: Color(0xFF232736), height: 20),
+
+                    // Component 4: Brake Pad Projection
+                    _buildAiComponentRow(
+                      context,
+                      title: 'Front & Rear Brake Pad Wear Projection',
+                      healthPct: provider.historyBrakeWearProjection.toInt(),
+                      statusText: provider.historyBrakeRecommendation,
+                      icon: Icons.disc_full_rounded,
+                      color: const Color(0xFF74B9FF),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
 

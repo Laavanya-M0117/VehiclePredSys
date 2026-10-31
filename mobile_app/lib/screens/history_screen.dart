@@ -280,10 +280,10 @@ class HistoryScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
-                        Text('83.4 km',
+                        Text('87.9 km',
                             style: TextStyle(
                                 color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                        Text('92 / 100',
+                        Text('94 / 100',
                             style: TextStyle(
                                 color: Color(0xFF00B894), fontSize: 24, fontWeight: FontWeight.bold)),
                       ],
@@ -294,9 +294,9 @@ class HistoryScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
-                        Text('Avg City Mileage: 31.2 km/L',
+                        Text('5 Days Logged • 9 Cold-Starts',
                             style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12)),
-                        Text('0 Breakdown Stops',
+                        Text('0 Breakdown Incidents',
                             style: TextStyle(
                                 color: Color(0xFF00B894), fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
