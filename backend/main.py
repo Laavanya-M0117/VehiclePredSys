@@ -375,6 +375,61 @@ def lookup_dtc_code(code: str, user: Dict[str, Any] = Depends(verify_jwt_token))
         return DTC_RULES[upper_code]
     raise HTTPException(status_code=404, detail=f"DTC code {upper_code} not found in database.")
 
+# ============================================================
+# LIVE HARDWARE TELEMETRY RELAY (Real-time Cloud Streaming)
+# ============================================================
+latest_live_telemetry: Dict[str, Dict[str, Any]] = {}
+
+class TelemetryPushRequest(BaseModel):
+    device_id: str = "20:25:08:00:1C:89"
+    raw_packet: str
+
+@app.post("/api/telemetry/push", tags=["Telemetry Relay"])
+def push_live_telemetry(req: TelemetryPushRequest):
+    """
+    Receives live raw OBD telemetry streamed from Arduino/HC-05 hardware bridge.
+    """
+    latest_live_telemetry[req.device_id] = {
+        "raw_packet": req.raw_packet,
+        "timestamp": time.time(),
+        "received_at": time.strftime("%H:%M:%S")
+    }
+    return {"status": "ok", "device_id": req.device_id, "timestamp": time.time()}
+
+@app.get("/api/telemetry/live", tags=["Telemetry Relay"])
+def get_live_telemetry(device_id: Optional[str] = None):
+    """
+    Returns the most recent live telemetry packet pushed from real hardware.
+    Auto-detects disconnects: if older than 3.5 seconds, flags as disconnected.
+    """
+    now = time.time()
+    target_data = None
+    target_id = device_id
+    if target_id and target_id in latest_live_telemetry:
+        target_data = latest_live_telemetry[target_id]
+    elif latest_live_telemetry:
+        target_id, target_data = max(latest_live_telemetry.items(), key=lambda item: item[1].get("timestamp", 0))
+
+    if not target_data:
+        return {
+            "status": "standby",
+            "is_active": False,
+            "raw_packet": "CSV,0,NO_SIGNAL,0,0,0,0x00",
+            "age_seconds": 999.0
+        }
+
+    age = now - target_data.get("timestamp", 0)
+    is_active = (age <= 3.5)
+
+    return {
+        "status": "online" if is_active else "disconnected",
+        "device_id": target_id,
+        "is_active": is_active,
+        "age_seconds": round(age, 2),
+        "raw_packet": target_data.get("raw_packet") if is_active else "CSV,0,NO_SIGNAL,0,0,0,0x00",
+        "received_at": target_data.get("received_at", "")
+    }
+
 # Mount Flutter Web App as unified single-port frontend (serves PWA, assets, and summary PDF)
 from fastapi.staticfiles import StaticFiles
 WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web_dist"))

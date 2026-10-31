@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/firebase_otp_service.dart';
@@ -35,6 +36,7 @@ class AppStateProvider with ChangeNotifier {
   bool _isConnected = false;
   Map<String, String>? _connectedDevice;
   Timer? _telemetryTimer;
+  DateTime? _lastLivePacketTime;
 
   // Live Telemetry Values (Standby Baseline: Zero fake data until live OBD packets arrive)
   double _rpm = 0.0;
@@ -667,8 +669,90 @@ class AppStateProvider with ChangeNotifier {
   void _startLiveTelemetry() {
     _telemetryTimer?.cancel();
     _telemetryTimer = null;
-    // ZERO FAKE DATA: Awaits real CAN/Bluetooth packets from hardware
-    debugPrint('[Telemetry] Live hardware listener active - awaiting real CAN/OBD packets.');
+
+    final isDemo = _connectedDevice?['id']?.contains('DEMO') == true;
+
+    if (isDemo) {
+      // Workbench Demo Simulation (Simulates gentle idle/cruising cycle for offline lab testing)
+      double demoRpm = 1050.0;
+      bool accelerating = true;
+      _telemetryTimer = Timer.periodic(const Duration(milliseconds: 500), (t) {
+        if (!_isConnected) {
+          t.cancel();
+          return;
+        }
+        if (accelerating) {
+          demoRpm += 80.0;
+          if (demoRpm >= 3800.0) accelerating = false;
+        } else {
+          demoRpm -= 60.0;
+          if (demoRpm <= 1080.0) accelerating = true;
+        }
+        final demoSpeed = demoRpm > 1500 ? (demoRpm - 1500) / 45.0 : 0.0;
+        parseIncomingBluetoothPacket(
+          'RPM:${demoRpm.toStringAsFixed(0)};SPD:${demoSpeed.toStringAsFixed(1)};TPS:6.2;MAP:42.0;IAT:32.0;EOT:88.5;O2:0.48;STFT:+1.2;LTFT:+0.8;BAT:14.15;GEAR:${demoSpeed > 10 ? "2" : "N"};CLUTCH:0;SIDE_STAND:0;F_WHEEL:${demoSpeed.toStringAsFixed(1)};R_WHEEL:${demoSpeed.toStringAsFixed(1)};DTC:NO FAULT'
+        );
+      });
+      return;
+    }
+
+    // REAL HARDWARE: 100% AUTOMATIC LIVE TELEMETRY STREAM & WATCHDOG
+    debugPrint('[Telemetry] Starting automatic live cloud hardware poller & auto-zero watchdog...');
+    _telemetryTimer = Timer.periodic(const Duration(milliseconds: 500), (t) async {
+      if (!_isConnected) {
+        t.cancel();
+        return;
+      }
+
+      final now = DateTime.now();
+
+      // AUTO-ZERO DISCONNECT WATCHDOG:
+      // If no new live packet has arrived in the last 3.0 seconds, bike is OFF or module disconnected!
+      if (_lastLivePacketTime != null && now.difference(_lastLivePacketTime!).inMilliseconds > 3000) {
+        if (_rpm != 0.0 || _speed != 0.0 || _coolantTemp != 0.0) {
+          _rpm = 0.0;
+          _speed = 0.0;
+          _coolantTemp = 0.0;
+          _batteryVoltage = 0.0;
+          _fuelTrim = 0.0;
+          _triageLevel = 'STANDBY';
+          _failureProbability = 0.0;
+          _diagnosticExplanation = 'Hardware Standby: Vehicle ignition key is OFF or circuit disconnected. Sensor readings are 0.';
+          _predictedFaultClass = 'STANDBY';
+          _rpmHistory.add(0.0);
+          if (_rpmHistory.length > 25) _rpmHistory.removeAt(0);
+          _speedHistory.add(0.0);
+          if (_speedHistory.length > 25) _speedHistory.removeAt(0);
+          notifyListeners();
+        }
+      }
+
+      // AUTOMATIC LIVE PACKET FETCH:
+      try {
+        final devId = _connectedDevice?['id'] ?? '';
+        final uri = Uri.parse('/api/telemetry/live?device_id=$devId');
+        final res = await http.get(uri).timeout(const Duration(milliseconds: 400));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['is_active'] == true && data['raw_packet'] != null) {
+            parseIncomingBluetoothPacket(data['raw_packet'].toString());
+          } else if (data['is_active'] == false && (_rpm != 0.0 || _speed != 0.0)) {
+            _rpm = 0.0;
+            _speed = 0.0;
+            _coolantTemp = 0.0;
+            _batteryVoltage = 0.0;
+            _fuelTrim = 0.0;
+            _triageLevel = 'STANDBY';
+            _failureProbability = 0.0;
+            _diagnosticExplanation = 'Hardware Standby: Vehicle ignition key is OFF or circuit disconnected.';
+            _predictedFaultClass = 'STANDBY';
+            notifyListeners();
+          }
+        }
+      } catch (_) {
+        // Tolerant to momentary network jitter
+      }
+    });
   }
 
   void injectDemoFault(String code, String desc, String severity) {
@@ -687,6 +771,10 @@ class AppStateProvider with ChangeNotifier {
   void parseIncomingBluetoothPacket(String rawPacket) {
     final clean = rawPacket.trim();
     if (clean.isEmpty) return;
+
+    if (!clean.contains('NO_SIGNAL') && !clean.contains('Waiting for vehicle')) {
+      _lastLivePacketTime = DateTime.now();
+    }
 
     // A. Handle Standby / Disconnect Notifications from Hardware
     if (clean.contains('NO_SIGNAL') || clean.contains('Waiting for vehicle')) {
