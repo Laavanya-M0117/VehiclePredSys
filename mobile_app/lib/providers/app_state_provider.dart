@@ -211,7 +211,21 @@ class AppStateProvider with ChangeNotifier {
       _odometerKm = prefs.getInt('odometer_km') ?? 0;
       _subscriptionTier = prefs.getString('subscription_tier') ?? '1-MONTH STARTER';
 
-      _isAuthenticated = false;
+      final savedAuth = prefs.getBool('is_authenticated') ?? false;
+      final savedDevId = prefs.getString('last_connected_device_id');
+      final savedDevName = prefs.getString('last_connected_device_name');
+      if (savedAuth && savedDevId != null && savedDevId.isNotEmpty) {
+        _isAuthenticated = true;
+        _connectedDevice = {
+          'id': savedDevId,
+          'name': savedDevName ?? 'HC-05',
+          'isReal': 'true',
+        };
+        _isConnected = true;
+        _startLiveTelemetry();
+      } else {
+        _isAuthenticated = false;
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('SharedPreferences init error: ' + e.toString());
@@ -454,9 +468,13 @@ class AppStateProvider with ChangeNotifier {
     return res;
   }
 
-  void signOut() {
+  void signOut() async {
     _isAuthenticated = false;
     _disconnectDevice();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_authenticated', false);
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -522,6 +540,12 @@ class AppStateProvider with ChangeNotifier {
     _connectedDevice = device;
     _isConnected = true;
     _isAuthenticated = true; // Transition to main navigation shell
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_authenticated', true);
+      await prefs.setString('last_connected_device_id', device['id'] ?? '');
+      await prefs.setString('last_connected_device_name', device['name'] ?? '');
+    } catch (_) {}
     _startLiveTelemetry();
     _evaluateInterTripDelta();
     notifyListeners();
