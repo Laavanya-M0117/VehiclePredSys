@@ -203,10 +203,10 @@ class AppStateProvider with ChangeNotifier {
       _displayName = prefs.getString('display_name') ?? 'VETRI Driver';
       _userEmail = prefs.getString('user_email') ?? '';
       _phoneNumber = prefs.getString('user_phone') ?? '';
-      _vehicleName = prefs.getString('vehicle_name') ?? 'KTM Duke 390';
-      _vehicleVin = prefs.getString('vehicle_vin') ?? 'MD2A1234567890VIN';
+      _vehicleName = prefs.getString('vehicle_name') ?? 'Royal Enfield Classic 350';
+      _vehicleVin = prefs.getString('vehicle_vin') ?? 'ME3J350CAN2026VIN';
       _vehicleType = _detectVehicleType(_vehicleVin, _vehicleName);
-      _odometerKm = prefs.getInt('odometer_km') ?? 14250;
+      _odometerKm = prefs.getInt('odometer_km') ?? 4320;
       _subscriptionTier = prefs.getString('subscription_tier') ?? '1-MONTH STARTER';
 
       _isAuthenticated = false;
