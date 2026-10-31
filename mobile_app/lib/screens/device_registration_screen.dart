@@ -138,7 +138,9 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen>
 
     if (res.success) {
       final devId = widget.device['id'] ?? 'unknown';
-      provider.bindDevice(devId, email, displayName: _nameCtrl.text.trim(), email: email);
+      final rawDigits = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
+      final phone = rawDigits.length >= 10 ? '+91 ' + rawDigits.substring(rawDigits.length - 10) : '';
+      provider.bindDevice(devId, email, displayName: _nameCtrl.text.trim(), email: email, phone: phone);
       provider.connectToDevice(widget.device);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainNavigationShell()),
@@ -176,7 +178,8 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen>
 
       provider.signInWithPhone(phone, displayName: name);
       final devId = widget.device['id'] ?? 'unknown';
-      provider.bindDevice(devId, phone, displayName: name, phone: phone);
+      final email = _emailCtrl.text.trim();
+      provider.bindDevice(devId, phone, displayName: name, email: email, phone: phone);
       provider.connectToDevice(widget.device);
 
       Navigator.of(context).pushReplacement(
@@ -368,6 +371,23 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen>
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF00B894)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _phoneCtrl,
+          keyboardType: TextInputType.phone,
+          maxLength: 10,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: 'Mobile Number (10 digits for SMS & Lock)',
+            hintStyle: const TextStyle(color: Color(0xFF5A5E73)),
+            filled: true,
+            fillColor: const Color(0xFF161922),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            prefixIcon: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF00B894)),
           ),
         ),
         const SizedBox(height: 12),

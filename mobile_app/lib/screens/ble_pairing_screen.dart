@@ -26,15 +26,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   @override
   void initState() {
     super.initState();
-    // Default discovered HC-05 module for direct pairing
-    _discoveredDevices.add({
-      'name': 'HC-05 (Arduino Nano + MCP2515)',
-      'id': 'HC05-NANO-OBD2',
-      'rssi': 'PAIRED (SPP)',
-      'isReal': 'true',
-      'isBonded': 'true',
-      'isHc05': 'true',
-    });
+    // Hardware list starts empty - only Workbench Simulation is shown until real device pairs
     _initBluetooth();
   }
 
@@ -155,8 +147,8 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   }
 
   void _showManualPairDialog() {
-    final nameCtrl = TextEditingController(text: 'VETRI-OBD');
-    final macCtrl = TextEditingController(text: 'ESP32-OBD-01');
+    final nameCtrl = TextEditingController(text: 'HC-05');
+    final macCtrl = TextEditingController(text: '20:25:08:00:1C:89');
 
     showDialog(
       context: context,
@@ -186,7 +178,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               decoration: InputDecoration(
                 labelText: 'Bluetooth Name',
                 labelStyle: const TextStyle(color: Color(0xFF8E92A4)),
-                hintText: 'VETRI-OBD or ESP32-OBD',
+                hintText: 'HC-05 (Bluetooth Module)',
                 hintStyle: const TextStyle(color: Color(0xFF5A5E73)),
                 filled: true,
                 fillColor: const Color(0xFF0D0E15),
@@ -202,7 +194,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               decoration: InputDecoration(
                 labelText: 'Hardware ID / MAC (Optional)',
                 labelStyle: const TextStyle(color: Color(0xFF8E92A4)),
-                hintText: 'ESP32-OBD-VETRI-01',
+                hintText: '20:25:08:00:1C:89 (Bluetooth MAC)',
                 hintStyle: const TextStyle(color: Color(0xFF5A5E73)),
                 filled: true,
                 fillColor: const Color(0xFF0D0E15),
@@ -221,14 +213,19 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              final devName = nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : 'VETRI-OBD';
-              final devId = macCtrl.text.trim().isNotEmpty ? macCtrl.text.trim() : 'ESP32-OBD-VETRI-01';
-              _connectDevice({
+              final devName = nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : 'HC-05';
+              final devId = macCtrl.text.trim().isNotEmpty ? macCtrl.text.trim() : '20:25:08:00:1C:89';
+              final newDev = {
                 'name': devName,
                 'id': devId,
-                'rssi': 'PAIRED',
+                'rssi': 'PAIRED (SPP)',
                 'isReal': 'true',
-              });
+                'isBonded': 'true',
+              };
+              if (!_discoveredDevices.any((d) => d['id'] == devId)) {
+                setState(() => _discoveredDevices.add(newDev));
+              }
+              _connectDevice(newDev);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00B894),
@@ -246,18 +243,9 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
     final provider = Provider.of<AppStateProvider>(context, listen: false);
     final deviceId = device['id'] ?? 'unknown';
 
-    // Direct Instant Connection for HC-05 Bluetooth Module (No Firebase OTP barrier needed)
-    if (device['isHc05'] == 'true' ||
-        (device['name'] != null && device['name']!.toUpperCase().contains('HC-05')) ||
-        (device['name'] != null && device['name']!.toUpperCase().contains('HC05'))) {
+    // Workbench simulation connects directly
+    if (deviceId.contains('DEMO')) {
       provider.connectToDevice(device);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connected to HC-05 (Arduino Nano + MCP2515)'),
-          backgroundColor: Color(0xFF00B894),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainNavigationShell()),
         (route) => false,
@@ -265,14 +253,21 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
       return;
     }
 
+    // Real hardware must undergo registration / security authentication
     final isBound = await provider.isDeviceBound(deviceId);
     if (!mounted) return;
 
     if (isBound) {
-      final owner = await provider.getDeviceOwner(deviceId) ?? '';
+      final binding = await provider.getDeviceBinding(deviceId);
+      final ownerEmail = binding?['email'] ?? binding?['user_identifier'] ?? '';
+      final ownerPhone = binding?['phone'] ?? '';
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => DeviceLoginScreen(device: device, boundEmail: owner),
+          builder: (_) => DeviceLoginScreen(
+            device: device,
+            boundEmail: ownerEmail,
+            boundPhone: ownerPhone,
+          ),
         ),
       );
     } else {
@@ -449,7 +444,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                   TextButton.icon(
                     onPressed: _showManualPairDialog,
                     icon: const Icon(Icons.add_link_rounded, color: Color(0xFF00B894), size: 16),
-                    label: const Text('Direct Connect',
+                    label: const Text('Pair Hardware',
                         style: TextStyle(
                             color: Color(0xFF00B894),
                             fontSize: 12,
@@ -463,6 +458,34 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               Expanded(
                 child: ListView(
                   children: [
+                    if (_discoveredDevices.isEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161922).withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF232736)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.bluetooth_searching_rounded, color: Color(0xFF8E92A4), size: 22),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text('No Real Hardware Paired Yet',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  SizedBox(height: 2),
+                                  Text('Tap "Pair Hardware" above to link your HC-05 (20:25:08:00:1C:89), or tap Workbench Simulation below.',
+                                      style: TextStyle(color: Color(0xFF8E92A4), fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // REAL PAIRED / DISCOVERED HARDWARE MODULES
                     ..._discoveredDevices.map((d) {
                       final bool isBonded = d['isBonded'] == 'true';

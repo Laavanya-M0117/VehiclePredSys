@@ -9,8 +9,9 @@ import 'main_navigation_shell.dart';
 class DeviceLoginScreen extends StatefulWidget {
   final Map<String, String> device;
   final String boundEmail;
+  final String? boundPhone;
 
-  const DeviceLoginScreen({super.key, required this.device, required this.boundEmail});
+  const DeviceLoginScreen({super.key, required this.device, required this.boundEmail, this.boundPhone});
 
   @override
   State<DeviceLoginScreen> createState() => _DeviceLoginScreenState();
@@ -101,6 +102,19 @@ class _DeviceLoginScreenState extends State<DeviceLoginScreen>
 
     final phoneFormatted =
         rawDigits.length == 10 ? rawDigits : rawDigits.substring(rawDigits.length - 10);
+
+    // STRICT OWNER VALIDATION: Only registered phone allowed
+    if (widget.boundPhone != null && widget.boundPhone!.isNotEmpty) {
+      final boundDigits = widget.boundPhone!.replaceAll(RegExp(r'\D'), '');
+      final boundLast10 = boundDigits.length >= 10 ? boundDigits.substring(boundDigits.length - 10) : boundDigits;
+      if (boundLast10.isNotEmpty && phoneFormatted != boundLast10) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Access Denied: This hardware device is registered to another mobile number. You can only sign in using the registered number.';
+        });
+        return;
+      }
+    }
     final res = await FirebaseOtpService().sendOtp(phoneFormatted);
 
     if (!mounted) return;
@@ -163,6 +177,17 @@ class _DeviceLoginScreenState extends State<DeviceLoginScreen>
       } catch (_) {}
     }
 
+    // STRICT OWNER VALIDATION: Only registered email allowed
+    final cleanEmail = email.trim().toLowerCase();
+    final regEmail = widget.boundEmail.trim().toLowerCase();
+    if (regEmail.isNotEmpty && cleanEmail != regEmail) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Access Denied: This hardware device is registered to another owner (' + widget.boundEmail + '). You cannot sign in with a different email.';
+      });
+      return;
+    }
+
     final provider = Provider.of<AppStateProvider>(context, listen: false);
     final res = await provider.signIn(email, _passwordCtrl.text);
 
@@ -185,10 +210,22 @@ class _DeviceLoginScreenState extends State<DeviceLoginScreen>
       _errorMessage = null;
     });
 
+    final enteredGoogle = _emailCtrl.text.trim().toLowerCase();
+    final regEmail = widget.boundEmail.trim().toLowerCase();
+    if (regEmail.isNotEmpty && enteredGoogle.isNotEmpty && enteredGoogle != regEmail) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Access Denied: This hardware device is registered to ' + widget.boundEmail + '. Google Sign-In must match the registered owner.';
+      });
+      return;
+    }
+
     final provider = Provider.of<AppStateProvider>(context, listen: false);
-    final googleEmail = _emailCtrl.text.trim().isNotEmpty && _isValidGmail(_emailCtrl.text.trim())
-        ? _emailCtrl.text.trim()
-        : 'rider.vetri@gmail.com';
+    final googleEmail = widget.boundEmail.isNotEmpty
+        ? widget.boundEmail
+        : (_emailCtrl.text.trim().isNotEmpty && _isValidGmail(_emailCtrl.text.trim())
+            ? _emailCtrl.text.trim()
+            : 'rider.vetri@gmail.com');
 
     final res = await provider.signIn(googleEmail, 'GoogleAuthSecuredSession123');
 

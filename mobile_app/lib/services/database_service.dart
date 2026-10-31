@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._internal();
@@ -73,7 +75,7 @@ class DatabaseService {
   }
 
   // ==========================================
-  // User & Device Binding Methods
+  // User & Device Binding Methods (Persistent on both Web & Mobile)
   // ==========================================
 
   Future<void> bindDeviceUser({
@@ -87,38 +89,37 @@ class DatabaseService {
     int? odometerKm,
     String? subscriptionTier,
   }) async {
-    if (kIsWeb) {
-      _webUserDevices[deviceId] = {
-        'device_id': deviceId,
-        'user_identifier': userIdentifier,
-        'display_name': displayName ?? 'VETRI Driver',
-        'email': email ?? '',
-        'phone': phone ?? '',
-        'vehicle_name': vehicleName ?? 'Royal Enfield Classic 350',
-        'vehicle_vin': vehicleVin ?? 'ME3J350CAN2026VIN',
-        'odometer_km': odometerKm ?? 14250,
-        'subscription_tier': subscriptionTier ?? 'PRO PLAN',
-        'created_at': DateTime.now().toIso8601String(),
-      };
-      return;
+    final bindingData = {
+      'device_id': deviceId,
+      'user_identifier': userIdentifier,
+      'display_name': displayName ?? 'VETRI Driver',
+      'email': email ?? '',
+      'phone': phone ?? '',
+      'vehicle_name': vehicleName ?? '',
+      'vehicle_vin': vehicleVin ?? '',
+      'odometer_km': odometerKm ?? 0,
+      'subscription_tier': subscriptionTier ?? 'PRO PLAN',
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    // 1. Always persist to SharedPreferences (works on Web LocalStorage & Mobile)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('vetri_device_binding_$deviceId', jsonEncode(bindingData));
+    } catch (e) {
+      debugPrint('SharedPreferences bind error: $e');
     }
+
+    _webUserDevices[deviceId] = bindingData;
+
+    if (kIsWeb) return;
+
     try {
       final db = await database;
       if (db == null) return;
       await db.insert(
         'user_devices',
-        {
-          'device_id': deviceId,
-          'user_identifier': userIdentifier,
-          'display_name': displayName ?? 'VETRI Driver',
-          'email': email ?? '',
-          'phone': phone ?? '',
-          'vehicle_name': vehicleName ?? 'Royal Enfield Classic 350',
-          'vehicle_vin': vehicleVin ?? 'ME3J350CAN2026VIN',
-          'odometer_km': odometerKm ?? 14250,
-          'subscription_tier': subscriptionTier ?? 'PRO PLAN',
-          'created_at': DateTime.now().toIso8601String(),
-        },
+        bindingData,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
@@ -127,9 +128,23 @@ class DatabaseService {
   }
 
   Future<Map<String, dynamic>?> getDeviceBinding(String deviceId) async {
+    // 1. Try SharedPreferences first (persists across browser reloads)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString('vetri_device_binding_$deviceId');
+      if (str != null && str.isNotEmpty) {
+        final decoded = jsonDecode(str) as Map<String, dynamic>;
+        _webUserDevices[deviceId] = decoded;
+        return decoded;
+      }
+    } catch (e) {
+      debugPrint('SharedPreferences getDeviceBinding error: $e');
+    }
+
     if (kIsWeb) {
       return _webUserDevices[deviceId];
     }
+
     try {
       final db = await database;
       if (db == null) return null;

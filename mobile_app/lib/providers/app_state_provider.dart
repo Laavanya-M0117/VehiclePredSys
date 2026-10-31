@@ -384,6 +384,10 @@ class AppStateProvider with ChangeNotifier {
     return null;
   }
 
+  Future<Map<String, dynamic>?> getDeviceBinding(String deviceId) async {
+    return await _db.getDeviceBinding(deviceId);
+  }
+
   Future<AuthResult> signIn(String emailOrPhone, String password) async {
     final res = await _api.login(emailOrPhone, password);
     if (res.success) {

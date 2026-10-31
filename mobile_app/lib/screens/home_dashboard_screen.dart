@@ -1185,6 +1185,7 @@ class _LiveTerminalSheet extends StatefulWidget {
 
 class _LiveTerminalSheetState extends State<_LiveTerminalSheet> {
   final ScrollController _scrollCtrl = ScrollController();
+  final TextEditingController _streamInputCtrl = TextEditingController();
   Timer? _refreshTimer;
   List<String> _logs = [];
   bool _autoScroll = true;
@@ -1213,6 +1214,7 @@ class _LiveTerminalSheetState extends State<_LiveTerminalSheet> {
   void dispose() {
     _refreshTimer?.cancel();
     _scrollCtrl.dispose();
+    _streamInputCtrl.dispose();
     super.dispose();
   }
 
@@ -1368,6 +1370,49 @@ class _LiveTerminalSheetState extends State<_LiveTerminalSheet> {
                   Text(
                     'BAT: ${widget.provider.batteryVoltage.toStringAsFixed(2)}V',
                     style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 10, fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Live Custom Telemetry Ingestion Bar
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _streamInputCtrl,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        hintText: 'Paste live OBD packet (RPM:1200;SPD:0;...)',
+                        hintStyle: const TextStyle(color: Color(0xFF5A5E73), fontSize: 10),
+                        filled: true,
+                        fillColor: const Color(0xFF040608),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF232736))),
+                      ),
+                      onSubmitted: (val) {
+                        if (val.trim().isNotEmpty) {
+                          widget.provider.parseIncomingBluetoothPacket(val.trim());
+                          _streamInputCtrl.clear();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      final val = _streamInputCtrl.text.trim();
+                      if (val.isNotEmpty) {
+                        widget.provider.parseIncomingBluetoothPacket(val);
+                        _streamInputCtrl.clear();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00B894),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    child: const Text('Send', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
               ),
