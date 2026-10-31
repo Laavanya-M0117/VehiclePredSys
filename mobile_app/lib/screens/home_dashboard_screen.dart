@@ -873,6 +873,37 @@ class HomeDashboardScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildCompactChip({
+    required IconData icon,
+    required String label,
+    required String val,
+    required String unit,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        Text(
+          val,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          unit,
+          style: const TextStyle(
+            color: Color(0xFF8E92A4),
+            fontSize: 9,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAiComponentRow(
     BuildContext context, {
     required String title,
