@@ -6,6 +6,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../providers/app_state_provider.dart';
 import 'device_login_screen.dart';
 import 'device_registration_screen.dart';
+import 'main_navigation_shell.dart';
 
 class BlePairingScreen extends StatefulWidget {
   const BlePairingScreen({super.key});
@@ -257,7 +258,10 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      Navigator.of(context).pop();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainNavigationShell()),
+        (route) => false,
+      );
       return;
     }
 

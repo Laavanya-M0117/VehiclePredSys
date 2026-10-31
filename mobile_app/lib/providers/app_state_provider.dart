@@ -18,10 +18,10 @@ class AppStateProvider with ChangeNotifier {
   String _displayName = 'VETRI Driver';
   String _userEmail = '';
   String _phoneNumber = '';
-  String _vehicleName = 'Royal Enfield Classic 350';
-  String _vehicleVin = 'ME3J350CAN2026VIN';
-  String _vehicleType = 'Royal Enfield 350cc (J-Series)';
-  int _odometerKm = 4320;
+  String _vehicleName = '';
+  String _vehicleVin = '';
+  String _vehicleType = '';
+  int _odometerKm = 0;
   String _subscriptionTier = '1-MONTH STARTER';
 
   // Notification Preferences
@@ -203,10 +203,10 @@ class AppStateProvider with ChangeNotifier {
       _displayName = prefs.getString('display_name') ?? 'VETRI Driver';
       _userEmail = prefs.getString('user_email') ?? '';
       _phoneNumber = prefs.getString('user_phone') ?? '';
-      _vehicleName = prefs.getString('vehicle_name') ?? 'Royal Enfield Classic 350';
-      _vehicleVin = prefs.getString('vehicle_vin') ?? 'ME3J350CAN2026VIN';
+      _vehicleName = prefs.getString('vehicle_name') ?? '';
+      _vehicleVin = prefs.getString('vehicle_vin') ?? '';
       _vehicleType = _detectVehicleType(_vehicleVin, _vehicleName);
-      _odometerKm = prefs.getInt('odometer_km') ?? 4320;
+      _odometerKm = prefs.getInt('odometer_km') ?? 0;
       _subscriptionTier = prefs.getString('subscription_tier') ?? '1-MONTH STARTER';
 
       _isAuthenticated = false;
@@ -515,6 +515,7 @@ class AppStateProvider with ChangeNotifier {
   void connectToDevice(Map<String, String> device) async {
     _connectedDevice = device;
     _isConnected = true;
+    _isAuthenticated = true; // Transition to main navigation shell
     _startLiveTelemetry();
     _evaluateInterTripDelta();
     notifyListeners();
