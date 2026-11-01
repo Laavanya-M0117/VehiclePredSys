@@ -46,10 +46,6 @@
 #define CAN_CS_PIN      5
 #define CAN_INT_PIN     21
 
-// Default speeds (Cycles automatically if no reply)
-#define CAN_SPEED       CAN_500KBPS
-#define CAN_CLOCK       MCP_8MHZ      // Change to MCP_16MHZ if crystal is 16.000
-
 MCP2515 mcp2515(CAN_CS_PIN);
 BluetoothSerial SerialBT;
 
