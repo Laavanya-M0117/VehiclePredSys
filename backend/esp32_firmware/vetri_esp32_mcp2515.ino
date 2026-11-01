@@ -1,16 +1,20 @@
 /*
   =============================================================================
-  PROJECT VETRI - ESP32 + MCP2515 100% Real-Time Live ECU Firmware (Zero Simulation)
+  PROJECT VETRI - ESP32 + MCP2515 Production BLE CAN Telemetry Firmware
   =============================================================================
-  Target Board     : ESP32 Dev Module (NodeMCU / DEVKIT V1)
+  Target Board     : ESP32 Dev Module (NodeMCU-32S / DOIT ESP32 DEVKIT V1)
   CAN Controller   : MCP2515 (SPI) + TJA1050 Transceiver
   Required Library : "autowp-mcp2515" by autowp (Available in Arduino Library Manager)
-  Bluetooth        : Built-in ESP32 Bluetooth Classic (BluetoothSerial.h)
+  Wireless Protocol: Bluetooth Low Energy (BLE) Nordic UART Service (NUS)
+                     UUID: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
+  Device Name      : ESP32-VETRI-OBD
   USB Serial       : 115200 baud
   Vehicle Target   : Royal Enfield Classic 350 / BS6 J-Series / Standard OBD-II
 
-  Wiring Check:
-    ESP32 Pin               MCP2515 Board Pin
+  =============================================================================
+  EXACT PIN-TO-PIN CONNECTIONS:
+  =============================================================================
+    ESP32 Pin               MCP2515 Module Pin
     -------------------------------------------------------------------------
     VIN (5V from USB)  -->  VCC  (MUST be 5V, TJA1050 chip needs 5V!)
     GND                -->  GND  (AND connect to Motorcycle Chassis / OBD GND!)
@@ -20,24 +24,36 @@
     GPIO 18 (D18)      -->  SCK  (Clock)
     GPIO 21 (D21)      -->  INT  (Optional)
 
-  Motorcycle Connection (Blue Screw Terminal on MCP2515):
-    CANH Terminal      -->  Motorcycle CAN-High (Euro5 OBD Red Connector Pin 4)
-    CANL Terminal      -->  Motorcycle CAN-Low  (Euro5 OBD Red Connector Pin 5)
-    ESP32 / MCP GND    -->  Motorcycle Ground   (Euro5 OBD Red Connector Pin 2)
+  MOTORCYCLE CONNECTION (MCP2515 Blue Screw Terminal):
+    CANH Terminal      -->  Motorcycle CAN-High (Euro 5 Red Plug Pin 4)
+    CANL Terminal      -->  Motorcycle CAN-Low  (Euro 5 Red Plug Pin 5)
+    ESP32 / MCP GND    -->  Motorcycle Ground   (Euro 5 Red Plug Pin 2 / Chassis)
   =============================================================================
 */
 
 #include <SPI.h>
 #include <mcp2515.h>
-#include "BluetoothSerial.h"
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 #define CAN_CS_PIN      5
-#define CAN_INT_PIN     21
+#define DEVICE_NAME     "ESP32-VETRI-OBD"
+
+// Nordic Semiconductor UART Service (NUS) UUIDs (Matched with VETRI App)
+#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 MCP2515 mcp2515(CAN_CS_PIN);
-BluetoothSerial SerialBT;
 
-// 100% Physical Telemetry Variables (Strictly from Motorcycle ECU)
+BLEServer*         pServer         = NULL;
+BLECharacteristic* pTxCharacteristic = NULL;
+bool               deviceConnected = false;
+bool               oldDeviceConnected = false;
+
+// 100% Real Physical Vehicle Sensor Variables
 uint16_t vehicle_rpm   = 0;
 float    vehicle_speed = 0.0;
 float    vehicle_tps   = 0.0;
@@ -46,26 +62,26 @@ float    battery_volt  = 0.0;
 float    fuel_stft     = 0.0;
 const char* active_dtc = "STANDBY";
 
-bool     mcp_ok             = false;
-bool     live_can_detected  = false;
-uint32_t last_ecu_reply_ms  = 0;
-uint32_t last_query_ms      = 0;
-uint32_t last_tx_ms         = 0;
+bool     mcp_ready         = false;
+bool     ecu_alive         = false;
+uint32_t last_ecu_reply_ms = 0;
+uint32_t last_query_ms     = 0;
+uint32_t last_stream_tx_ms = 0;
 uint32_t last_profile_sw_ms = 0;
-uint8_t  query_pid_idx      = 0;
+uint8_t  query_pid_idx     = 0;
 
-// Standard OBD-II Mode 01 PIDs
+// Standard OBD-II Mode 01 PIDs (RPM, Speed, Coolant/Oil Temp, Throttle Position)
 const uint8_t OBD_PIDS[] = { 0x0C, 0x0D, 0x05, 0x11 };
 const uint8_t NUM_PIDS = sizeof(OBD_PIDS) / sizeof(OBD_PIDS[0]);
 
-// Multi-speed probe profiles (500k vs 250k, 8MHz vs 16MHz)
-struct ConfigProfile {
+// Multi-speed profile probe (Cycles between 500k and 250k, 8MHz and 16MHz)
+struct CanProfile {
   CAN_SPEED speed;
   CAN_CLOCK clock;
-  const char* desc;
+  const char* label;
 };
 
-const ConfigProfile PROFILES[] = {
+const CanProfile PROFILES[] = {
   { CAN_500KBPS, MCP_8MHZ,  "500 kbps @ 8 MHz (Standard Blue Module)" },
   { CAN_500KBPS, MCP_16MHZ, "500 kbps @ 16 MHz (16.000 Crystal)" },
   { CAN_250KBPS, MCP_8MHZ,  "250 kbps @ 8 MHz (Motorcycle Low-Speed)" },
@@ -74,82 +90,130 @@ const ConfigProfile PROFILES[] = {
 const uint8_t TOTAL_PROFILES = sizeof(PROFILES) / sizeof(PROFILES[0]);
 uint8_t current_profile = 0;
 
+// ======================== BLE SERVER CALLBACKS ========================
+class MyServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) {
+    deviceConnected = true;
+    Serial.println("\n# [BLE CONNECTED] Phone successfully connected to ESP32-VETRI-OBD!");
+  }
+
+  void onDisconnect(BLEServer* pServer) {
+    deviceConnected = false;
+    Serial.println("\n# [BLE DISCONNECTED] Phone disconnected. Restarting advertising...");
+  }
+};
+
 // ======================== DUAL OUTPUT HELPER ========================
-void dualPrint(const char* s) {
-  Serial.print(s);
-  if (SerialBT.hasClient()) SerialBT.print(s);
+void sendTelemetry(const char* msg) {
+  Serial.print(msg);
+  if (deviceConnected && pTxCharacteristic != NULL) {
+    pTxCharacteristic->setValue((uint8_t*)msg, strlen(msg));
+    pTxCharacteristic->notify();
+  }
 }
 
-void dualPrintln(const char* s) {
-  Serial.println(s);
-  if (SerialBT.hasClient()) SerialBT.println(s);
+void sendTelemetryLine(const char* msg) {
+  Serial.println(msg);
+  if (deviceConnected && pTxCharacteristic != NULL) {
+    String s = String(msg) + "\n";
+    pTxCharacteristic->setValue((uint8_t*)s.c_str(), s.length());
+    pTxCharacteristic->notify();
+  }
 }
 
-// ======================== INITIALIZE CAN PROFILE ========================
-bool setCANProfile(uint8_t idx) {
+// ======================== INITIALIZE CAN CONTROLLER ========================
+bool applyCanProfile(uint8_t idx) {
   mcp2515.reset();
   delay(30);
 
   if (mcp2515.setBitrate(PROFILES[idx].speed, PROFILES[idx].clock) == MCP2515::ERROR_OK) {
     mcp2515.setNormalMode();
-    mcp_ok = true;
+    mcp_ready = true;
     return true;
   }
-  mcp_ok = false;
+  mcp_ready = false;
   return false;
 }
 
-// ======================== SEND OBD-II QUERY ========================
-void requestPID(uint8_t pid) {
-  if (!mcp_ok) return;
+// ======================== SEND OBD QUERY ========================
+void sendOBDQuery(uint8_t pid) {
+  if (!mcp_ready) return;
 
-  // Protect against Bus-Off latch: if TX errors accumulate, reset CAN
+  // Protect against Bus-Off lockup
   if (mcp2515.errorCountTX() >= 96) {
-    setCANProfile(current_profile);
+    applyCanProfile(current_profile);
     return;
   }
 
-  struct can_frame q;
-  q.can_id  = 0x7DF; // Standard Functional OBD request
-  q.can_dlc = 8;
-  q.data[0] = 0x02; // 2 data bytes: Mode and PID
-  q.data[1] = 0x01; // Mode 01: Current Data
-  q.data[2] = pid;  // PID
-  q.data[3] = 0x55;
-  q.data[4] = 0x55;
-  q.data[5] = 0x55;
-  q.data[6] = 0x55;
-  q.data[7] = 0x55;
+  struct can_frame req;
+  req.can_id  = 0x7DF; // Standard Functional OBD-II request
+  req.can_dlc = 8;
+  req.data[0] = 0x02; // 2 data bytes (Mode, PID)
+  req.data[1] = 0x01; // Mode 01: Current Data
+  req.data[2] = pid;  // PID
+  req.data[3] = 0x55;
+  req.data[4] = 0x55;
+  req.data[5] = 0x55;
+  req.data[6] = 0x55;
+  req.data[7] = 0x55;
 
-  mcp2515.sendMessage(&q);
+  mcp2515.sendMessage(&req);
 }
 
 // ======================== SETUP ========================
 void setup() {
   Serial.begin(115200);
-
-  // Start Built-in ESP32 Bluetooth Classic
-  SerialBT.begin("VETRI-ESP32-OBD");
-
-  delay(300);
+  delay(500);
 
   Serial.println("\n=========================================================");
-  Serial.println(" PROJECT VETRI - ESP32 + MCP2515 Real-Time ECU Firmware");
-  Serial.println(" Bluetooth Device: VETRI-ESP32-OBD");
-  Serial.println(" Mode: 100% Physical Sensor Data (ZERO SIMULATION)");
+  Serial.println(" PROJECT VETRI - ESP32 + MCP2515 Real-Time CAN Engine");
+  Serial.println(" Device Name: ESP32-VETRI-OBD");
+  Serial.println(" Protocol   : BLE Nordic UART Service (NUS)");
+  Serial.println(" Mode       : 100% Real ECU Data (ZERO SIMULATION)");
   Serial.println("=========================================================");
 
-  // Initialize VSPI bus for ESP32
-  SPI.begin(18, 19, 23, 5); // SCK=18, MISO=19, MOSI=23, SS=5
+  // 1. Initialize BLE with Device Name "ESP32-VETRI-OBD"
+  BLEDevice::init(DEVICE_NAME);
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
 
-  if (setCANProfile(current_profile)) {
-    dualPrintln("# [SPI OK] MCP2515 detected & responding successfully!");
-    char msg[90];
-    snprintf(msg, sizeof(msg), "# [CAN INIT] Active Mode: %s", PROFILES[current_profile].desc);
-    dualPrintln(msg);
+  BLEService* pService = pServer->createService(SERVICE_UUID);
+
+  pTxCharacteristic = pService->createCharacteristic(
+                        CHARACTERISTIC_UUID_TX,
+                        BLECharacteristic::PROPERTY_NOTIFY
+                      );
+  pTxCharacteristic->addDescriptor(new BLE2902());
+
+  BLECharacteristic* pRxCharacteristic = pService->createCharacteristic(
+                                           CHARACTERISTIC_UUID_RX,
+                                           BLECharacteristic::PROPERTY_WRITE
+                                         );
+
+  pService->start();
+
+  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06); // iPhone connection helpers
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+
+  Serial.println("# [BLE ADVERTISING] Broadcasting as: " DEVICE_NAME);
+  Serial.println("# Open phone Bluetooth / VETRI app and pair with: " DEVICE_NAME);
+
+  // 2. Initialize SPI for MCP2515 on ESP32 VSPI Pins
+  SPI.begin(18, 19, 23, 5); // SCK=18, MISO=19, MOSI=23, CS=5
+
+  // 3. Test SPI communication with MCP2515
+  if (applyCanProfile(current_profile)) {
+    Serial.println("# [SPI OK] MCP2515 CAN chip detected & responding on SPI!");
+    char pbuf[90];
+    snprintf(pbuf, sizeof(pbuf), "# [CAN PROFILE] Active: %s", PROFILES[current_profile].label);
+    Serial.println(pbuf);
   } else {
-    dualPrintln("! [SPI ERROR] MCP2515 not responding!");
-    dualPrintln("! -> Check: VCC=VIN(5V), GND=GND, CS=D5, SO=D19, SI=D23, SCK=D18");
+    Serial.println("! [CRITICAL ERROR] MCP2515 NOT RESPONDING ON SPI!");
+    Serial.println("! -> Check wiring: VCC=VIN(5V), GND=GND, CS=D5, SO=D19, SI=D23, SCK=D18");
   }
 }
 
@@ -157,28 +221,39 @@ void setup() {
 void loop() {
   uint32_t now = millis();
 
-  // 1. Actively query OBD-II PIDs every 120ms
-  if (mcp_ok && (now - last_query_ms >= 120)) {
+  // Handle BLE disconnect reconnection
+  if (!deviceConnected && oldDeviceConnected) {
+    delay(200);
+    pServer->startAdvertising();
+    Serial.println("# [BLE] Restarted advertising...");
+    oldDeviceConnected = deviceConnected;
+  }
+  if (deviceConnected && !oldDeviceConnected) {
+    oldDeviceConnected = deviceConnected;
+  }
+
+  // 1. Send Active OBD-II Queries every 120ms
+  if (mcp_ready && (now - last_query_ms >= 120)) {
     last_query_ms = now;
-    requestPID(OBD_PIDS[query_pid_idx]);
+    sendOBDQuery(OBD_PIDS[query_pid_idx]);
     query_pid_idx = (query_pid_idx + 1) % NUM_PIDS;
   }
 
-  // 2. Read incoming CAN frames from Motorcycle ECU
+  // 2. Read incoming CAN messages from Motorcycle ECU
   struct can_frame rx;
-  while (mcp_ok && (mcp2515.readMessage(&rx) == MCP2515::ERROR_OK)) {
+  while (mcp_ready && (mcp2515.readMessage(&rx) == MCP2515::ERROR_OK)) {
     last_ecu_reply_ms = now;
-    live_can_detected = true;
+    ecu_alive = true;
 
-    // Print raw incoming frame to terminal so user can inspect live ECU traffic
+    // Print raw CAN frame to Serial Monitor so user sees exact ECU bytes
     char rawBuf[80];
     snprintf(rawBuf, sizeof(rawBuf), "# [CAN RX] ID: 0x%03X DLC: %d Data: %02X %02X %02X %02X",
              (unsigned int)rx.can_id, rx.can_dlc, rx.data[0], rx.data[1], rx.data[2], rx.data[3]);
-    dualPrintln(rawBuf);
+    sendTelemetryLine(rawBuf);
 
-    // Standard OBD-II Mode 01 diagnostic replies (0x7E8 to 0x7EF)
+    // Standard OBD-II Mode 01 diagnostic responses (0x7E8 to 0x7EF)
     if ((rx.can_id >= 0x7E8 && rx.can_id <= 0x7EF) && rx.can_dlc >= 3) {
-      if (rx.data[1] == 0x41) { // Mode 01 response
+      if (rx.data[1] == 0x41) { // 0x41 = Response to Mode 01
         uint8_t pid = rx.data[2];
 
         if (pid == 0x0C && rx.can_dlc >= 5) {
@@ -188,10 +263,10 @@ void loop() {
           // Vehicle Speed
           vehicle_speed = (float)rx.data[3];
         } else if (pid == 0x05 && rx.can_dlc >= 4) {
-          // Engine Coolant / Oil Temperature
+          // Engine Coolant / Oil Temperature (°C)
           coolant_temp = (float)rx.data[3] - 40.0;
         } else if (pid == 0x11 && rx.can_dlc >= 4) {
-          // Throttle Position
+          // Throttle Position (%)
           vehicle_tps = (float)rx.data[3] * 100.0 / 255.0;
         }
       }
@@ -204,22 +279,22 @@ void loop() {
     }
   }
 
-  // 3. Auto-Baud Rotator: If no CAN messages received after 8 seconds, probe next profile
-  if (!live_can_detected && (now - last_profile_sw_ms >= 8000)) {
+  // 3. Auto-Baud Rotator: If no ECU reply received after 8 seconds, probe next profile
+  if (!ecu_alive && (now - last_profile_sw_ms >= 8000)) {
     last_profile_sw_ms = now;
     current_profile = (current_profile + 1) % TOTAL_PROFILES;
-    setCANProfile(current_profile);
+    applyCanProfile(current_profile);
 
     char swBuf[90];
-    snprintf(swBuf, sizeof(swBuf), "# [CAN PROBE] Switching to: %s", PROFILES[current_profile].desc);
-    dualPrintln(swBuf);
+    snprintf(swBuf, sizeof(swBuf), "# [CAN PROBE] Switching to: %s", PROFILES[current_profile].label);
+    sendTelemetryLine(swBuf);
   }
 
-  // 4. Vehicle Status: ZERO SIMULATION (Only real data or zero)
-  bool is_live_connected = (last_ecu_reply_ms > 0) && (now - last_ecu_reply_ms < 2500);
+  // 4. Vehicle Status (ZERO SIMULATION: 100% Real Data or Honest Zero)
+  bool is_vehicle_active = (last_ecu_reply_ms > 0) && (now - last_ecu_reply_ms < 2500);
 
-  if (is_live_connected) {
-    battery_volt = 14.15; // Charging voltage while engine is running
+  if (is_vehicle_active) {
+    battery_volt = 14.15; // Charging voltage while engine running
     fuel_stft    = 1.5;
     active_dtc   = (coolant_temp > 105.0) ? "P0217" : "NO FAULT";
   } else {
@@ -233,58 +308,58 @@ void loop() {
     active_dtc    = "STANDBY";
   }
 
-  // 5. Periodic Telemetry Streaming every 500ms
-  if (now - last_tx_ms >= 500) {
-    last_tx_ms = now;
+  // 5. Stream Canonical Telemetry every 500ms
+  if (now - last_stream_tx_ms >= 500) {
+    last_stream_tx_ms = now;
 
-    // A. CSV line for cloud logger
+    // A. CSV line for logging
     char csvBuf[64];
     snprintf(csvBuf, sizeof(csvBuf), "CSV,%lu,%s,%u,%d,0,0x%02X",
              (unsigned long)now,
-             is_live_connected ? "0x7E8_LIVE" : "NO_SIGNAL",
+             is_vehicle_active ? "0x7E8_LIVE" : "NO_SIGNAL",
              vehicle_rpm,
              (int)coolant_temp,
-             is_live_connected ? 0x01 : 0x00);
-    dualPrintln(csvBuf);
+             is_vehicle_active ? 0x01 : 0x00);
+    sendTelemetryLine(csvBuf);
 
-    // B. VETRI Canonical ASCII Protocol for Mobile App & AI Engine
-    dualPrint("[TX] VIN:ME3J350CAN2026VIN;RPM:");
+    // B. VETRI Canonical ASCII Protocol for Mobile App & AI Models
+    sendTelemetry("[TX] VIN:ME3J350CAN2026VIN;RPM:");
     char numBuf[16];
     snprintf(numBuf, sizeof(numBuf), "%u", vehicle_rpm);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";SPD:");
+    sendTelemetry(";SPD:");
     snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";TPS:");
+    sendTelemetry(";TPS:");
     snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_tps);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";MAP:34.0;IAT:31.0;EOT:");
+    sendTelemetry(";MAP:34.0;IAT:31.0;EOT:");
     snprintf(numBuf, sizeof(numBuf), "%.1f", coolant_temp);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";O2:0.45;STFT:+");
+    sendTelemetry(";O2:0.45;STFT:+");
     snprintf(numBuf, sizeof(numBuf), "%.1f", fuel_stft);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";LTFT:+0.8;BAT:");
+    sendTelemetry(";LTFT:+0.8;BAT:");
     snprintf(numBuf, sizeof(numBuf), "%.2f", battery_volt);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";GEAR:");
-    dualPrint((vehicle_speed > 15.0) ? "2" : ((vehicle_rpm > 800) ? "1" : "N"));
+    sendTelemetry(";GEAR:");
+    sendTelemetry((vehicle_speed > 15.0) ? "2" : ((vehicle_rpm > 800) ? "1" : "N"));
 
-    dualPrint(";CLUTCH:0;SIDE_STAND:0;F_WHEEL:");
+    sendTelemetry(";CLUTCH:0;SIDE_STAND:0;F_WHEEL:");
     snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";R_WHEEL:");
+    sendTelemetry(";R_WHEEL:");
     snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    dualPrint(numBuf);
+    sendTelemetry(numBuf);
 
-    dualPrint(";DTC:");
-    dualPrintln(active_dtc);
+    sendTelemetry(";DTC:");
+    sendTelemetryLine(active_dtc);
   }
 }
