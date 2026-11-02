@@ -106,7 +106,7 @@ def evaluate_dtc_rules(readings_aggregated: dict, ambient_temp: float = 28.0) ->
         active_dtcs.append(DTC_RULES["P0300"])
         
     voltage = readings_aggregated.get('voltage', 13.8)
-    if voltage < 11.5:
+    if 0.0 < voltage < 11.5:
         active_dtcs.append(DTC_RULES["P0562"])
         
     o2_voltage = readings_aggregated.get('o2_voltage', 0.45)

@@ -1059,18 +1059,28 @@ class AppStateProvider with ChangeNotifier {
       final double totalTrim = _fuelTrim + _ltft;
       final double vacRatio = _mapKpa / (_tps + 1.0);
 
-      if (_coolantTemp > 115.0 || _batteryVoltage < 11.0 || _activeFaults.length >= 3) {
+      if (_batteryVoltage > 0.0 && (_coolantTemp > 115.0 || _batteryVoltage < 11.0 || _activeFaults.length >= 3)) {
         _triageLevel = 'CRITICAL';
         _failureProbability = 0.92;
         _remainingUsefulLifeHours = 8.0;
-      } else if (_coolantTemp > 108.0 || _batteryVoltage < 11.8 || totalTrim > 18.0 || vacRatio > 20.0 || _activeFaults.isNotEmpty) {
+        _diagnosticExplanation = _batteryVoltage < 11.0
+            ? 'Critical Electrical Fault: Battery voltage at ' + _batteryVoltage.toStringAsFixed(1) + 'V (Alternator/Regulator undercharge).'
+            : 'Critical Thermal/Fault Condition: Engine Temp ' + _coolantTemp.toStringAsFixed(0) + '°C.';
+      } else if (_batteryVoltage > 0.0 && (_coolantTemp > 108.0 || _batteryVoltage < 11.8 || totalTrim > 18.0 || vacRatio > 20.0 || _activeFaults.isNotEmpty)) {
         _triageLevel = 'MEDIUM';
         _failureProbability = 0.65;
         _remainingUsefulLifeHours = 48.0;
-      } else {
+        _diagnosticExplanation = 'Advisory: Sensor telemetry deviation detected. Monitor throttle and fuel trim.';
+      } else if (_batteryVoltage >= 12.0 || _rpm > 400.0) {
         _triageLevel = 'LOW';
-        _failureProbability = 0.04;
+        _failureProbability = 0.02;
         _remainingUsefulLifeHours = 950.0;
+        _diagnosticExplanation = 'Nominal Powertrain Condition: Royal Enfield J-Series ECU operating within normal OEM parameters (RPM: ' + _rpm.toInt().toString() + ', EOT: ' + _coolantTemp.toInt().toString() + '°C, Battery: ' + _batteryVoltage.toStringAsFixed(1) + 'V).';
+      } else {
+        _triageLevel = 'STANDBY';
+        _failureProbability = 0.0;
+        _remainingUsefulLifeHours = 999.0;
+        _diagnosticExplanation = 'Hardware Standby: Vehicle ignition key is OFF or waiting for engine crank.';
       }
 
       _db.insertTelemetryPoint(

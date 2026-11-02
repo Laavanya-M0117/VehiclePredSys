@@ -458,10 +458,12 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                     ActionChip(
                       backgroundColor: const Color(0xFF00B894).withValues(alpha: 0.15),
                       side: const BorderSide(color: Color(0xFF00B894)),
-                      avatar: const Icon(Icons.my_location_rounded, color: Color(0xFF00B894), size: 14),
-                      label: const Text('Kengeri (Live GPS)',
+                      avatar: _isLoadingGps
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00B894)))
+                          : const Icon(Icons.my_location_rounded, color: Color(0xFF00B894), size: 14),
+                      label: const Text('📍 Auto-Detect Live GPS',
                           style: TextStyle(color: Color(0xFF00B894), fontSize: 11, fontWeight: FontWeight.bold)),
-                      onPressed: () => _setPresetLocality('Kengeri Satellite Town & Mysore Road, Bengaluru', 12.9172, 77.4837),
+                      onPressed: _fetchLiveLocation,
                     ),
                     const SizedBox(width: 8),
                     ActionChip(

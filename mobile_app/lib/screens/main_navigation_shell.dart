@@ -76,55 +76,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         index: _currentIndex,
         children: screens,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          border: Border(
-            top: BorderSide(
-              color: isDark ? const Color(0xFF232736) : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex > 4 ? 0 : _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: const Color(0xFF6C5CE7),
-          unselectedItemColor: const Color(0xFF8E92A4),
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded),
-              label: 'Dashboard',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.speed_rounded),
-              label: 'Diagnostics',
-            ),
-            BottomNavigationBarItem(
-              icon: Badge(
-                isLabelVisible: provider.activeAlerts.isNotEmpty,
-                label: Text('${provider.activeAlerts.length}'),
-                backgroundColor: const Color(0xFFFF7675),
-                child: const Icon(Icons.warning_amber_rounded),
-              ),
-              label: 'Alerts',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'History',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.workspace_premium_rounded),
-              label: 'Plans',
-            ),
-          ],
-        ),
-      ),
+
     );
   }
 

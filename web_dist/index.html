@@ -25,6 +25,23 @@
 
   <title>VETRI - Vehicle Predictive Triage</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Proactive Location Permission & GPS Lock -->
+  <script>
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          window.vetriUserLat = pos.coords.latitude;
+          window.vetriUserLng = pos.coords.longitude;
+          console.log("[VETRI GPS] Live Coordinates Locked:", pos.coords.latitude, pos.coords.longitude);
+        },
+        function(err) {
+          console.warn("[VETRI GPS] Location permission status:", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

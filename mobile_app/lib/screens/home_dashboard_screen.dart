@@ -168,7 +168,9 @@ class HomeDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<AppStateProvider>(context);
     final String triage = provider.triageLevel;
-    final int score = ((1.0 - provider.failureProbability) * 100).toInt().clamp(5, 99);
+    final int score = triage == 'STANDBY'
+        ? 100
+        : ((1.0 - provider.failureProbability) * 100).toInt().clamp(5, 99);
 
     Color triageColor = const Color(0xFF00B894);
     if (triage == 'HIGH' || triage == 'CRITICAL') {
@@ -485,9 +487,11 @@ class HomeDashboardScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  triage == 'LOW'
-                                      ? 'Nominal J-Series Operation'
-                                      : (triage == 'MEDIUM' ? 'Early Anomaly Detected' : 'Critical Fault Condition'),
+                                  triage == 'STANDBY'
+                                      ? 'Vehicle Standby • Ignition OFF'
+                                      : (triage == 'LOW'
+                                          ? 'Nominal J-Series Operation'
+                                          : (triage == 'MEDIUM' ? 'Early Anomaly Detected' : 'Critical Fault Condition')),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,

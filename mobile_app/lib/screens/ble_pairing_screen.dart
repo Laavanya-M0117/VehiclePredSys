@@ -21,12 +21,33 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   StreamSubscription<List<ScanResult>>? _scanSub;
 
   bool _isScanning = false;
+  bool _isNavigating = false;
+  Timer? _webBleWatchTimer;
   final List<Map<String, String>> _discoveredDevices = [];
 
   @override
   void initState() {
     super.initState();
-    // Hardware list starts empty - only Workbench Simulation is shown until real device pairs
+    if (kIsWeb) {
+      if (!_discoveredDevices.any((d) => d['id'] == 'ESP32-VETRI-OBD')) {
+        _discoveredDevices.add({
+          'name': 'ESP32-VETRI-OBD',
+          'id': 'ESP32-VETRI-OBD',
+          'rssi': 'READY',
+          'isReal': 'true',
+          'isBonded': 'false',
+        });
+      }
+      _webBleWatchTimer = Timer.periodic(const Duration(milliseconds: 500), (t) {
+        if (!mounted) return;
+        final provider = Provider.of<AppStateProvider>(context, listen: false);
+        if (provider.isConnected && !provider.isAuthenticated && !_isNavigating) {
+          _isNavigating = true;
+          t.cancel();
+          _connectDevice({'name': 'ESP32-VETRI-OBD', 'id': 'ESP32-VETRI-OBD', 'isReal': 'true'});
+        }
+      });
+    }
     _initBluetooth();
   }
 
@@ -268,6 +289,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
     }
   }
   void dispose() {
+    _webBleWatchTimer?.cancel();
     _adapterSub?.cancel();
     _scanSub?.cancel();
     FlutterBluePlus.stopScan();
