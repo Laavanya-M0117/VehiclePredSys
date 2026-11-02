@@ -1,24 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
+  <!-- Auto-redirect if opened on outdated / unlinked domain -->
+  <script>
+    if (window.location.hostname === 've-triage.onrender.com') {
+      window.location.replace('https://vetri-predictive-triage.onrender.com' + window.location.pathname + window.location.search);
+    }
+  </script>
 
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Vehicle Predictive Triage and Health Monitoring System">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -29,18 +23,10 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>vehicle_predictive_triage</title>
+  <title>VETRI - Vehicle Predictive Triage</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 
   <!-- VETRI Web Bluetooth Bridge for Chrome on Android -->
@@ -84,6 +70,9 @@
         const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
 
         let bleBuffer = "";
+        let packetCount = 0;
+        let lastPushTime = 0;
+
         await txChar.startNotifications();
         txChar.addEventListener('characteristicvaluechanged', (e) => {
           const chunk = new TextDecoder().decode(e.target.value);
@@ -92,12 +81,21 @@
             const idx = bleBuffer.indexOf('\n');
             const line = bleBuffer.substring(0, idx).trim();
             bleBuffer = bleBuffer.substring(idx + 1);
-            if (line.length > 0) {
-              fetch('/api/telemetry/push', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_id: 'ESP32-VETRI-OBD', raw_packet: line })
-              }).catch(() => {});
+            if (line.length > 0 && (line.includes('RPM:') || line.includes('0x7E8') || line.includes('NO_SIGNAL') || line.startsWith('{'))) {
+              packetCount++;
+              text.innerText = "ESP32 LIVE (" + packetCount + " pkts)";
+              const now = Date.now();
+              if (now - lastPushTime >= 150) {
+                lastPushTime = now;
+                const pushTarget = window.location.hostname.includes('ve-triage')
+                  ? 'https://vetri-predictive-triage.onrender.com/api/telemetry/push'
+                  : '/api/telemetry/push';
+                fetch(pushTarget, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ device_id: 'ESP32-VETRI-OBD', raw_packet: line })
+                }).catch(() => {});
+              }
             }
           }
         });
@@ -117,5 +115,4 @@
     };
   </script>
 </body>
-
 </html>

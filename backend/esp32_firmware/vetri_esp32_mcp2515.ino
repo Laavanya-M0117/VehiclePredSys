@@ -265,7 +265,7 @@ void loop() {
     char rawBuf[80];
     snprintf(rawBuf, sizeof(rawBuf), "# [CAN RX] ID: 0x%03X DLC: %d Data: %02X %02X %02X %02X",
              (unsigned int)rx.can_id, rx.can_dlc, rx.data[0], rx.data[1], rx.data[2], rx.data[3]);
-    sendTelemetryLine(rawBuf);
+    Serial.println(rawBuf); // Send to USB Serial only; do NOT flood BLE with 100 frames/sec
 
     // Standard OBD-II Mode 01 diagnostic responses (0x7E8 to 0x7EF)
     if ((rx.can_id >= 0x7E8 && rx.can_id <= 0x7EF) && rx.can_dlc >= 3) {
@@ -340,44 +340,21 @@ void loop() {
              is_vehicle_active ? 0x01 : 0x00);
     sendTelemetryLine(csvBuf);
 
-    // B. VETRI Canonical ASCII Protocol for Mobile App & AI Models
-    sendTelemetry("[TX] VIN:ME3J350CAN2026VIN;RPM:");
-    char numBuf[16];
-    snprintf(numBuf, sizeof(numBuf), "%u", vehicle_rpm);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";SPD:");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";TPS:");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_tps);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";MAP:34.0;IAT:31.0;EOT:");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", coolant_temp);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";O2:0.45;STFT:+");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", fuel_stft);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";LTFT:+0.8;BAT:");
-    snprintf(numBuf, sizeof(numBuf), "%.2f", battery_volt);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";GEAR:");
-    sendTelemetry((vehicle_speed > 15.0) ? "2" : ((vehicle_rpm > 800) ? "1" : "N"));
-
-    sendTelemetry(";CLUTCH:0;SIDE_STAND:0;F_WHEEL:");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";R_WHEEL:");
-    snprintf(numBuf, sizeof(numBuf), "%.1f", vehicle_speed);
-    sendTelemetry(numBuf);
-
-    sendTelemetry(";DTC:");
-    sendTelemetryLine(active_dtc);
+    // B. VETRI Canonical ASCII Protocol for Mobile App & AI Models (Single Atomic Line)
+    char telBuf[256];
+    snprintf(telBuf, sizeof(telBuf),
+      "[TX] VIN:ME3J350CAN2026VIN;RPM:%u;SPD:%.1f;TPS:%.1f;MAP:34.0;IAT:31.0;EOT:%.1f;O2:0.45;STFT:+%.1f;LTFT:+0.8;BAT:%.2f;GEAR:%s;CLUTCH:0;SIDE_STAND:0;F_WHEEL:%.1f;R_WHEEL:%.1f;DTC:%s",
+      vehicle_rpm,
+      vehicle_speed,
+      vehicle_tps,
+      coolant_temp,
+      fuel_stft,
+      battery_volt,
+      (vehicle_speed > 15.0) ? "2" : ((vehicle_rpm > 800) ? "1" : "N"),
+      vehicle_speed,
+      vehicle_speed,
+      active_dtc
+    );
+    sendTelemetryLine(telBuf);
   }
 }

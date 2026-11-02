@@ -748,7 +748,7 @@ class AppStateProvider with ChangeNotifier {
 
       // AUTOMATIC LIVE PACKET FETCH FROM RELAY:
       try {
-        final uri = Uri.parse('/api/telemetry/live');
+        final uri = Uri.parse('${ApiService.baseUrl}/api/telemetry/live');
         final res = await http.get(uri).timeout(const Duration(milliseconds: 280));
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
@@ -859,6 +859,7 @@ class AppStateProvider with ChangeNotifier {
 
           switch (key) {
             case 'VIN':
+            case '[TX] VIN':
               _vehicleVin = val;
               _vehicleType = _detectVehicleType(_vehicleVin, _vehicleName);
               break;
@@ -923,6 +924,17 @@ class AppStateProvider with ChangeNotifier {
       // Format C: ESP32 + MCP2515 CAN Frame (CSV or raw hex)
       else if (clean.startsWith('CSV,') || clean.contains('0x123') || clean.contains(',')) {
         final parts = clean.split(',');
+        if (parts.length >= 5 && (parts[2].contains('7E8') || parts[2].contains('LIVE'))) {
+          final rpmVal = double.tryParse(parts[3].trim());
+          final tempVal = double.tryParse(parts[4].trim());
+          if (rpmVal != null) _rpm = rpmVal;
+          if (tempVal != null && tempVal > 0) {
+            _coolantTemp = tempVal;
+            _eot = tempVal;
+          }
+          if (_batteryVoltage <= 0.0) _batteryVoltage = 14.15;
+          _isConnected = true;
+        }
 
         // C.1: VETRI Diagnostic Frame: CSV,<millis>,<CAN_ID>,<DLC>,<RPM>,<Temp>,<Status>
         // Example: CSV,45123,0x123,4,3200,87,0x01 (or without CSV prefix: 45123,0x123,4,3200,87,0x01)
