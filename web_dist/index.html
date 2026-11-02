@@ -42,5 +42,80 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <!-- VETRI Web Bluetooth Bridge for Chrome on Android -->
+  <div id="vetri-ble-banner" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:10px;background:rgba(22,25,34,0.95);border:1px solid #00B894;border-radius:30px;padding:8px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.6);backdrop-filter:blur(8px);font-family:sans-serif;">
+    <span id="ble-status-dot" style="width:10px;height:10px;border-radius:50%;background:#FDCB6E;"></span>
+    <span id="ble-status-text" style="color:#FFF;font-size:12px;font-weight:600;">ESP32 BLE: Disconnected</span>
+    <button id="ble-connect-btn" onclick="window.vetriWebBleConnect()" style="background:#00B894;color:#FFF;border:none;border-radius:20px;padding:6px 14px;font-size:11px;font-weight:bold;cursor:pointer;outline:none;">Connect Bike</button>
+  </div>
+
+  <script>
+    window.vetriWebBleConnect = async function() {
+      const btn = document.getElementById('ble-connect-btn');
+      const text = document.getElementById('ble-status-text');
+      const dot = document.getElementById('ble-status-dot');
+
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth requires Google Chrome on Android or Desktop over HTTPS.\n\nTip: You can also download and install VETRI_Final.apk for native Bluetooth connection.");
+        return;
+      }
+
+      try {
+        btn.innerText = "Pairing...";
+        btn.disabled = true;
+
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'ESP32-VETRI-OBD' }],
+          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+        });
+
+        text.innerText = "Connecting GATT...";
+        const server = await device.gatt.connect();
+
+        device.addEventListener('gattserverdisconnected', () => {
+          text.innerText = "ESP32 BLE: Disconnected";
+          dot.style.background = "#FF7675";
+          btn.innerText = "Reconnect";
+          btn.disabled = false;
+        });
+
+        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+
+        let bleBuffer = "";
+        await txChar.startNotifications();
+        txChar.addEventListener('characteristicvaluechanged', (e) => {
+          const chunk = new TextDecoder().decode(e.target.value);
+          bleBuffer += chunk;
+          while (bleBuffer.includes('\n')) {
+            const idx = bleBuffer.indexOf('\n');
+            const line = bleBuffer.substring(0, idx).trim();
+            bleBuffer = bleBuffer.substring(idx + 1);
+            if (line.length > 0) {
+              fetch('/api/telemetry/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: 'ESP32-VETRI-OBD', raw_packet: line })
+              }).catch(() => {});
+            }
+          }
+        });
+
+        text.innerText = "ESP32 LIVE (Streaming)";
+        dot.style.background = "#00B894";
+        btn.innerText = "Connected";
+        btn.style.background = "#2D3436";
+        btn.disabled = true;
+      } catch (err) {
+        console.error("BLE Connect Error:", err);
+        text.innerText = "Pairing Cancelled / Failed";
+        dot.style.background = "#FF7675";
+        btn.innerText = "Retry Connect";
+        btn.disabled = false;
+      }
+    };
+  </script>
 </body>
+
 </html>
