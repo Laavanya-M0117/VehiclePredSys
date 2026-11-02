@@ -218,14 +218,15 @@ class AppStateProvider with ChangeNotifier {
         _isAuthenticated = true;
         _connectedDevice = {
           'id': savedDevId,
-          'name': savedDevName ?? 'HC-05',
+          'name': savedDevName ?? 'ESP32-VETRI-OBD',
           'isReal': 'true',
         };
         _isConnected = true;
-        _startLiveTelemetry();
       } else {
         _isAuthenticated = false;
       }
+      // Always start telemetry poller so web/cloud updates immediately when packets arrive
+      _startLiveTelemetry();
       notifyListeners();
     } catch (e) {
       debugPrint('SharedPreferences init error: ' + e.toString());
@@ -721,18 +722,12 @@ class AppStateProvider with ChangeNotifier {
     }
 
     // REAL HARDWARE: 100% AUTOMATIC LIVE TELEMETRY STREAM & WATCHDOG
-    debugPrint('[Telemetry] Starting automatic live cloud hardware poller & auto-zero watchdog...');
-    _telemetryTimer = Timer.periodic(const Duration(milliseconds: 500), (t) async {
-      if (!_isConnected) {
-        t.cancel();
-        return;
-      }
-
+    debugPrint('[Telemetry] Starting continuous automatic live cloud hardware poller (300ms cadence)...');
+    _telemetryTimer = Timer.periodic(const Duration(milliseconds: 300), (t) async {
       final now = DateTime.now();
 
       // AUTO-ZERO DISCONNECT WATCHDOG:
-      // If no new live packet has arrived in the last 3.0 seconds, bike is OFF or module disconnected!
-      if (_lastLivePacketTime != null && now.difference(_lastLivePacketTime!).inMilliseconds > 3000) {
+      if (_lastLivePacketTime != null && now.difference(_lastLivePacketTime!).inMilliseconds > 4000) {
         if (_rpm != 0.0 || _speed != 0.0 || _coolantTemp != 0.0) {
           _rpm = 0.0;
           _speed = 0.0;
@@ -741,25 +736,28 @@ class AppStateProvider with ChangeNotifier {
           _fuelTrim = 0.0;
           _triageLevel = 'STANDBY';
           _failureProbability = 0.0;
-          _diagnosticExplanation = 'Hardware Standby: Vehicle ignition key is OFF or circuit disconnected. Sensor readings are 0.';
+          _diagnosticExplanation = 'Hardware Standby: Vehicle ignition key is OFF or circuit disconnected. Awaiting CAN packet.';
           _predictedFaultClass = 'STANDBY';
           _rpmHistory.add(0.0);
-          if (_rpmHistory.length > 25) _rpmHistory.removeAt(0);
+          if (_rpmHistory.length > 30) _rpmHistory.removeAt(0);
           _speedHistory.add(0.0);
-          if (_speedHistory.length > 25) _speedHistory.removeAt(0);
+          if (_speedHistory.length > 30) _speedHistory.removeAt(0);
           notifyListeners();
         }
       }
 
-      // AUTOMATIC LIVE PACKET FETCH:
+      // AUTOMATIC LIVE PACKET FETCH FROM RELAY:
       try {
-        final devId = _connectedDevice?['id'] ?? '';
-        final uri = Uri.parse('/api/telemetry/live?device_id=$devId');
-        final res = await http.get(uri).timeout(const Duration(milliseconds: 400));
+        final uri = Uri.parse('/api/telemetry/live');
+        final res = await http.get(uri).timeout(const Duration(milliseconds: 280));
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           if (data['is_active'] == true && data['raw_packet'] != null) {
-            parseIncomingBluetoothPacket(data['raw_packet'].toString());
+            final String raw = data['raw_packet'].toString();
+            if (raw.contains('RPM:') || raw.contains('0x7E8_LIVE') || raw.startsWith('{')) {
+              _isConnected = true;
+              parseIncomingBluetoothPacket(raw);
+            }
           } else if (data['is_active'] == false && (_rpm != 0.0 || _speed != 0.0)) {
             _rpm = 0.0;
             _speed = 0.0;
