@@ -70,8 +70,10 @@ uint32_t last_stream_tx_ms = 0;
 uint32_t last_profile_sw_ms = 0;
 uint8_t  query_pid_idx     = 0;
 
-// Standard OBD-II Mode 01 PIDs (RPM, Speed, Coolant/Oil Temp, Throttle Position)
-const uint8_t OBD_PIDS[] = { 0x0C, 0x0D, 0x05, 0x11 };
+// Standard OBD-II Mode 01 PIDs for Royal Enfield Classic 350 J-Series
+// Note: Air/Oil cooled engine does not have liquid coolant (PID 0x05)
+// Prioritize: 0x0C (RPM - verified working), 0x11 (Throttle Position), 0x0D (Speed)
+const uint8_t OBD_PIDS[] = { 0x0C, 0x11, 0x0C, 0x0D };
 const uint8_t NUM_PIDS = sizeof(OBD_PIDS) / sizeof(OBD_PIDS[0]);
 
 // Multi-speed profile probe (Cycles between 500k and 250k, 8MHz and 16MHz)
@@ -139,9 +141,16 @@ bool applyCanProfile(uint8_t idx) {
 void sendOBDQuery(uint8_t pid) {
   if (!mcp_ready) return;
 
-  // Protect against Bus-Off lockup
-  if (mcp2515.errorCountTX() >= 96) {
-    applyCanProfile(current_profile);
+  // Check and clear buffer overflow or bus-off lockup
+  uint8_t eflg = mcp2515.getErrorFlags();
+  if (eflg & 0xC0) {
+    mcp2515.clearRXnOVR();
+  }
+
+  if (mcp2515.errorCountTX() >= 128) {
+    mcp2515.clearInterrupts();
+    mcp2515.clearRXnOVR();
+    mcp2515.setNormalMode();
     return;
   }
 
@@ -232,14 +241,21 @@ void loop() {
     oldDeviceConnected = deviceConnected;
   }
 
-  // 1. Send Active OBD-II Queries every 120ms
-  if (mcp_ready && (now - last_query_ms >= 120)) {
+  // 1. Send Active OBD-II Queries every 160ms (Gentle cadence for motorcycle ECU)
+  if (mcp_ready && (now - last_query_ms >= 160)) {
     last_query_ms = now;
     sendOBDQuery(OBD_PIDS[query_pid_idx]);
     query_pid_idx = (query_pid_idx + 1) % NUM_PIDS;
   }
 
   // 2. Read incoming CAN messages from Motorcycle ECU
+  if (mcp_ready) {
+    uint8_t eflg = mcp2515.getErrorFlags();
+    if (eflg & 0xC0) {
+      mcp2515.clearRXnOVR();
+    }
+  }
+
   struct can_frame rx;
   while (mcp_ready && (mcp2515.readMessage(&rx) == MCP2515::ERROR_OK)) {
     last_ecu_reply_ms = now;
@@ -279,8 +295,9 @@ void loop() {
     }
   }
 
-  // 3. Auto-Baud Rotator: If no ECU reply received after 8 seconds, probe next profile
-  if (!ecu_alive && (now - last_profile_sw_ms >= 8000)) {
+  // 3. Auto-Baud Rotator & Recovery:
+  // If no ECU reply received for > 8 seconds, probe/recover next CAN profile
+  if ((now - last_ecu_reply_ms >= 8000) && (now - last_profile_sw_ms >= 8000)) {
     last_profile_sw_ms = now;
     current_profile = (current_profile + 1) % TOTAL_PROFILES;
     applyCanProfile(current_profile);
@@ -291,7 +308,8 @@ void loop() {
   }
 
   // 4. Vehicle Status (ZERO SIMULATION: 100% Real Data or Honest Zero)
-  bool is_vehicle_active = (last_ecu_reply_ms > 0) && (now - last_ecu_reply_ms < 2500);
+  // 3.5s hysteresis prevents temporary sensor flutter from zeroing out gauges
+  bool is_vehicle_active = (last_ecu_reply_ms > 0) && (now - last_ecu_reply_ms < 3500);
 
   if (is_vehicle_active) {
     battery_volt = 14.15; // Charging voltage while engine running
@@ -308,8 +326,8 @@ void loop() {
     active_dtc    = "STANDBY";
   }
 
-  // 5. Stream Canonical Telemetry every 500ms
-  if (now - last_stream_tx_ms >= 500) {
+  // 5. Stream Canonical Telemetry every 180ms (~5.5 Hz fast, responsive UI stream)
+  if (now - last_stream_tx_ms >= 180) {
     last_stream_tx_ms = now;
 
     // A. CSV line for logging

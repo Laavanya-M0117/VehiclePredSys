@@ -147,8 +147,8 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   }
 
   void _showManualPairDialog() {
-    final nameCtrl = TextEditingController(text: 'HC-05');
-    final macCtrl = TextEditingController(text: '20:25:08:00:1C:89');
+    final nameCtrl = TextEditingController(text: 'ESP32-VETRI-OBD');
+    final macCtrl = TextEditingController(text: '');
 
     showDialog(
       context: context,
@@ -178,7 +178,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               decoration: InputDecoration(
                 labelText: 'Bluetooth Name',
                 labelStyle: const TextStyle(color: Color(0xFF8E92A4)),
-                hintText: 'HC-05 (Bluetooth Module)',
+                hintText: 'ESP32-VETRI-OBD',
                 hintStyle: const TextStyle(color: Color(0xFF5A5E73)),
                 filled: true,
                 fillColor: const Color(0xFF0D0E15),
@@ -194,7 +194,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               decoration: InputDecoration(
                 labelText: 'Hardware ID / MAC (Optional)',
                 labelStyle: const TextStyle(color: Color(0xFF8E92A4)),
-                hintText: '20:25:08:00:1C:89 (Bluetooth MAC)',
+                hintText: 'ESP32 MAC or BLE Remote ID',
                 hintStyle: const TextStyle(color: Color(0xFF5A5E73)),
                 filled: true,
                 fillColor: const Color(0xFF0D0E15),
@@ -243,17 +243,6 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
     final provider = Provider.of<AppStateProvider>(context, listen: false);
     final deviceId = device['id'] ?? 'unknown';
 
-    // Workbench simulation connects directly
-    if (deviceId.contains('DEMO')) {
-      provider.connectToDevice(device);
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainNavigationShell()),
-        (route) => false,
-      );
-      return;
-    }
-
-    // Real hardware must undergo registration / security authentication
     final isBound = await provider.isDeviceBound(deviceId);
     if (!mounted) return;
 
@@ -278,8 +267,6 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
       );
     }
   }
-
-  @override
   void dispose() {
     _adapterSub?.cancel();
     _scanSub?.cancel();
@@ -478,7 +465,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                                   Text('No Real Hardware Paired Yet',
                                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                                   SizedBox(height: 2),
-                                  Text('Tap "Pair Hardware" above to link your HC-05 (20:25:08:00:1C:89), or tap Workbench Simulation below.',
+                                  Text('Searching for nearby ESP32-VETRI-OBD hardware. Ensure your ESP32 is powered on and within range.',
                                       style: TextStyle(color: Color(0xFF8E92A4), fontSize: 11)),
                                 ],
                               ),
@@ -581,85 +568,6 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                         ),
                       );
                     }),
-
-                    // WORKBENCH DEMO MODULE (Always available for testing)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF161922),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF232736)),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => _connectDevice({
-                            'name': 'Workbench Demo OBD-II Module',
-                            'id': 'ESP32-OBD-VETRI-DEMO',
-                            'rssi': '-42 dBm',
-                          }),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFDCB6E).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.science_rounded,
-                                      color: Color(0xFFFDCB6E), size: 24),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Text(
-                                            'Workbench Demo Module',
-                                            style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFDCB6E)
-                                                  .withValues(alpha: 0.2),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text('EMULATOR',
-                                                style: TextStyle(
-                                                    color: Color(0xFFFDCB6E),
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold)),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Simulates live engine telemetry stream without bike connection',
-                                        style: TextStyle(color: Color(0xFF8E92A4), fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(Icons.arrow_forward_ios_rounded,
-                                    color: Color(0xFF8E92A4), size: 14),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
