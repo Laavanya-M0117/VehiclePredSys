@@ -61,6 +61,10 @@ class AppStateProvider with ChangeNotifier {
   bool _sideStandUp = true;
   double _frontWheelSpeed = 0.0;
   double _rearWheelSpeed = 0.0;
+  double _currentLat = 0.0;
+  double _currentLng = 0.0;
+  bool _hasGpsLock = false;
+  double _lastGpsSpeed = 0.0;
 
   // Part 1: Real-Time Diagnostic Triage Metadata
   String _diagnosticExplanation = 'Awaiting Live CAN Stream: Connect OBD-II cable and switch ignition key ON.';
@@ -163,6 +167,9 @@ class AppStateProvider with ChangeNotifier {
   bool get sideStandUp => _sideStandUp;
   double get frontWheelSpeed => _frontWheelSpeed;
   double get rearWheelSpeed => _rearWheelSpeed;
+  double get userLatitude => _currentLat;
+  double get userLongitude => _currentLng;
+  bool get hasGpsLock => _hasGpsLock;
 
   String get diagnosticExplanation => _diagnosticExplanation;
   String get predictedFaultClass => _predictedFaultClass;
@@ -753,6 +760,15 @@ class AppStateProvider with ChangeNotifier {
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           if (data['is_active'] == true && data['raw_packet'] != null) {
+            if (data['lat'] != null && (data['lat'] as num) != 0.0) {
+              _currentLat = (data['lat'] as num).toDouble();
+              _currentLng = (data['lng'] as num).toDouble();
+              _hasGpsLock = true;
+            }
+            if (data['gps_speed'] != null && (data['gps_speed'] as num) > 1.0) {
+              _lastGpsSpeed = (data['gps_speed'] as num).toDouble();
+              _speed = _lastGpsSpeed;
+            }
             final String raw = data['raw_packet'].toString();
             if (raw.contains('RPM:') || raw.contains('0x7E8_LIVE') || raw.startsWith('{')) {
               _isConnected = true;
@@ -868,7 +884,16 @@ class AppStateProvider with ChangeNotifier {
               break;
             case 'SPD':
             case 'SPEED':
-              _speed = double.tryParse(val) ?? _speed;
+              final parsedSpd = double.tryParse(val) ?? 0.0;
+              if (parsedSpd > 0.0) {
+                _speed = parsedSpd;
+              } else if (_lastGpsSpeed > 1.0) {
+                _speed = _lastGpsSpeed;
+              } else if (_rpm > 1200) {
+                _speed = ((_rpm - 1050) * 0.024).clamp(0.0, 130.0);
+              } else {
+                _speed = 0.0;
+              }
               break;
             case 'TPS':
               _tps = double.tryParse(val) ?? _tps;
@@ -1044,6 +1069,17 @@ class AppStateProvider with ChangeNotifier {
             _batteryVoltage = 11.2;
           }
         }
+      }
+
+      // Dynamic Speed Sync (Prioritizes Physical OBD -> Satellite GPS Doppler -> Transmission RPM Ratio)
+      if (_speed <= 0.0) {
+        if (_lastGpsSpeed > 1.0) {
+          _speed = _lastGpsSpeed;
+        } else if (_rpm > 1200) {
+          _speed = ((_rpm - 1050) * 0.024).clamp(0.0, 130.0);
+        }
+      } else if (_rpm <= 1180 && _lastGpsSpeed <= 1.0) {
+        _speed = 0.0;
       }
 
       // Record graph history

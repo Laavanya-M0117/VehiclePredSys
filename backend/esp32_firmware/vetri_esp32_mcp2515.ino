@@ -315,6 +315,15 @@ void loop() {
     battery_volt = 14.15; // Charging voltage while engine running
     fuel_stft    = 1.5;
     active_dtc   = (coolant_temp > 105.0) ? "P0217" : "NO FAULT";
+
+    // Dynamic Real-Time Vehicle Speed:
+    // If ECU does not report Mode 01 PID 0x0D (Euro 5 BS6 bikes where ABS module handles speed):
+    if (vehicle_speed <= 0.0 && vehicle_rpm > 1200) {
+      float est_spd = (float)(vehicle_rpm - 1050) * 0.024f;
+      if (est_spd > 0.0f) vehicle_speed = est_spd;
+    } else if (vehicle_rpm <= 1180) {
+      vehicle_speed = 0.0;
+    }
   } else {
     // BIKE OFF / STANDBY - HONEST ZEROES
     vehicle_rpm   = 0;

@@ -383,16 +383,27 @@ latest_live_telemetry: Dict[str, Dict[str, Any]] = {}
 class TelemetryPushRequest(BaseModel):
     device_id: str = "20:25:08:00:1C:89"
     raw_packet: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    gps_speed: Optional[float] = None
 
 @app.post("/api/telemetry/push", tags=["Telemetry Relay"])
 def push_live_telemetry(req: TelemetryPushRequest):
     """
     Receives live raw OBD telemetry streamed from Arduino/HC-05 hardware bridge.
     """
+    prev = latest_live_telemetry.get(req.device_id, {})
+    lat = req.lat if (req.lat is not None and req.lat != 0.0) else prev.get("lat")
+    lng = req.lng if (req.lng is not None and req.lng != 0.0) else prev.get("lng")
+    gps_speed = req.gps_speed if req.gps_speed is not None else prev.get("gps_speed")
+
     latest_live_telemetry[req.device_id] = {
         "raw_packet": req.raw_packet,
         "timestamp": time.time(),
-        "received_at": time.strftime("%H:%M:%S")
+        "received_at": time.strftime("%H:%M:%S"),
+        "lat": lat,
+        "lng": lng,
+        "gps_speed": gps_speed
     }
     return {"status": "ok", "device_id": req.device_id, "timestamp": time.time()}
 
@@ -427,7 +438,10 @@ def get_live_telemetry(device_id: Optional[str] = None):
         "is_active": is_active,
         "age_seconds": round(age, 2),
         "raw_packet": target_data.get("raw_packet") if is_active else "CSV,0,NO_SIGNAL,0,0,0,0x00",
-        "received_at": target_data.get("received_at", "")
+        "received_at": target_data.get("received_at", ""),
+        "lat": target_data.get("lat"),
+        "lng": target_data.get("lng"),
+        "gps_speed": target_data.get("gps_speed")
     }
 
 # Mount Flutter Web App as unified single-port frontend (serves PWA, assets, and summary PDF)

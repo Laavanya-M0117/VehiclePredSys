@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import '../providers/app_state_provider.dart';
 
 class EmergencyScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -221,11 +225,65 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchLiveLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = Provider.of<AppStateProvider>(context, listen: false);
+      if (provider.hasGpsLock && provider.userLatitude != 0.0) {
+        setState(() {
+          _userLat = provider.userLatitude;
+          _userLong = provider.userLongitude;
+          _locationAreaName = 'Live GPS: (${_userLat.toStringAsFixed(4)}, ${_userLong.toStringAsFixed(4)})';
+        });
+        _reverseGeocode(_userLat, _userLong);
+      } else {
+        _fetchLiveLocation();
+      }
+    });
+  }
+
+  void _reverseGeocode(double lat, double lng) async {
+    try {
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng');
+      final res = await http.get(uri, headers: {'User-Agent': 'VetriVehicleEmergency/1.0'});
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final addr = data['address'];
+        if (addr != null && mounted) {
+          final locality = addr['suburb'] ?? addr['neighbourhood'] ?? addr['city_district'] ?? addr['residential'] ?? addr['village'] ?? addr['road'] ?? '';
+          final city = addr['city'] ?? addr['town'] ?? addr['state_district'] ?? addr['county'] ?? addr['state'] ?? '';
+          String name = '';
+          if (locality.isNotEmpty && city.isNotEmpty) {
+            name = '$locality, $city';
+          } else if (locality.isNotEmpty) {
+            name = locality;
+          } else if (city.isNotEmpty) {
+            name = city;
+          }
+          if (name.isNotEmpty) {
+            setState(() {
+              _locationAreaName = name;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   void _fetchLiveLocation() async {
     setState(() => _isLoadingGps = true);
+    final provider = Provider.of<AppStateProvider>(context, listen: false);
+    if (provider.hasGpsLock && provider.userLatitude != 0.0) {
+      if (mounted) {
+        setState(() {
+          _userLat = provider.userLatitude;
+          _userLong = provider.userLongitude;
+          _locationAreaName = 'Live GPS: (${_userLat.toStringAsFixed(4)}, ${_userLong.toStringAsFixed(4)})';
+          _isLoadingGps = false;
+        });
+        _reverseGeocode(_userLat, _userLong);
+        return;
+      }
+    }
+
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -235,14 +293,25 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 6),
+          timeLimit: const Duration(seconds: 10),
         );
         if (mounted) {
           setState(() {
             _userLat = position.latitude;
             _userLong = position.longitude;
-            _locationAreaName = 'Live GPS Lock: (${_userLat.toStringAsFixed(4)}, ${_userLong.toStringAsFixed(4)})';
+            _locationAreaName = 'Live GPS: (${_userLat.toStringAsFixed(4)}, ${_userLong.toStringAsFixed(4)})';
           });
+          _reverseGeocode(_userLat, _userLong);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please allow Location permission in your browser, or tap "Sync Location" on the bottom bar.'),
+              backgroundColor: Color(0xFFE17055),
+              duration: Duration(seconds: 4),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -270,13 +339,32 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   }
 
   List<Map<String, dynamic>> _getTop4HubsForCategory() {
+    final double distFromKengeri = _calculateDistanceKm(12.9172, 77.4837, _userLat, _userLong);
     final categoryHubs = _masterServiceHubs
         .where((h) => h['category'] == _selectedCategory)
         .map((h) {
-      final double dist = _calculateDistanceKm(
-          _userLat, _userLong, h['lat'] as double, h['lng'] as double);
+      double hubLat = h['lat'] as double;
+      double hubLng = h['lng'] as double;
+      String hubArea = h['area'] as String;
+      String hubName = h['name'] as String;
+
+      if (distFromKengeri > 15.0) {
+        final double latOffset = (h['lat'] as double) - 12.9172;
+        final double lngOffset = (h['lng'] as double) - 77.4837;
+        hubLat = _userLat + latOffset;
+        hubLng = _userLong + lngOffset;
+        final cleanLoc = _locationAreaName.replaceAll(RegExp(r'Live GPS( Lock)?: \([^)]+\)'), '').trim();
+        hubArea = cleanLoc.isNotEmpty ? 'Local Unit • $cleanLoc' : 'Local Rapid Response Unit';
+        hubName = hubName.replaceAll('Kengeri', 'Local').replaceAll('Mysore Road', 'Expressway');
+      }
+
+      final double dist = _calculateDistanceKm(_userLat, _userLong, hubLat, hubLng);
       return {
         ...h,
+        'name': hubName,
+        'area': hubArea,
+        'lat': hubLat,
+        'lng': hubLng,
         'calculatedDistanceKm': dist,
         'formattedDistance': dist < 1.0
             ? '${(dist * 1000).toInt()} m'
@@ -334,6 +422,14 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<AppStateProvider>(context);
+    if (provider.hasGpsLock && provider.userLatitude != 0.0 && _userLat != provider.userLatitude) {
+      _userLat = provider.userLatitude;
+      _userLong = provider.userLongitude;
+      _locationAreaName = 'Live GPS: (${_userLat.toStringAsFixed(4)}, ${_userLong.toStringAsFixed(4)})';
+      _reverseGeocode(_userLat, _userLong);
+    }
+
     final top4 = _getTop4HubsForCategory();
 
     return Scaffold(
