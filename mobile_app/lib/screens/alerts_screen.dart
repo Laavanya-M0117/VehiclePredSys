@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
 import '../services/pdf_report_service.dart';
+import '../theme/app_colors.dart';
 
 class AlertsScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -358,11 +359,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+          icon: Icon(Icons.menu_rounded, color: AppColors.icon(context), size: 26),
           onPressed: widget.onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
         ),
-        title: const Text('Fault Alerts & Triage',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text('Fault Alerts & Triage',
+            style: TextStyle(color: AppColors.text(context), fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
@@ -516,18 +517,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF232736)),
+                    border: Border.all(color: AppColors.border(context)),
                   ),
                   child: Column(
-                    children: const [
-                      Icon(Icons.verified_rounded, color: Color(0xFF00B894), size: 40),
-                      SizedBox(height: 12),
+                    children: [
+                      const Icon(Icons.verified_rounded, color: Color(0xFF00B894), size: 40),
+                      const SizedBox(height: 12),
                       Text('No Faults Detected',
                           style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                      SizedBox(height: 4),
+                              color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 4),
                       Text('OBD-II continuous monitor reported zero active DTC triggers.',
-                          style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                          style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                     ],
                   ),
                 )
@@ -583,7 +584,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(f['description'] ?? 'Powertrain fault detected.',
-                                  style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 12)),
+                                  style: TextStyle(color: AppColors.text(context), fontSize: 12)),
                             ],
                           ),
                         ),
@@ -594,9 +595,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
               const SizedBox(height: 20),
 
               // Workbench Fault Simulator
-              const Text('WORKBENCH FAULT INJECTION SIMULATOR',
+              Text('WORKBENCH FAULT INJECTION SIMULATOR',
                   style: TextStyle(
-                      color: Color(0xFF8E92A4),
+                      color: AppColors.textSecondary(context),
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.1)),
@@ -646,11 +647,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 10)),
+        Text(label, style: TextStyle(color: AppColors.textSecondary(context), fontSize: 10)),
         const SizedBox(height: 2),
         Text(value,
             style: TextStyle(
-                color: color ?? Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                color: color ?? AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 13)),
       ],
     );
   }

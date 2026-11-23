@@ -1,17 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Auto-redirect if opened on outdated / unlinked domain -->
-  <script>
-    if (window.location.hostname === 've-triage.onrender.com') {
-      window.location.replace('https://vetri-predictive-triage.onrender.com' + window.location.pathname + window.location.search);
-    }
-  </script>
-
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Vehicle Predictive Triage and Health Monitoring System">
 
   <!-- iOS meta tags & icons -->
@@ -25,93 +19,230 @@
 
   <title>VETRI - Vehicle Predictive Triage</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #0D0E15; }
+
+    /* ---- Floating connectivity button (Bluetooth + GPS). Small, draggable, docks to the screen edge ---- */
+    #vetri-fab {
+      position: fixed; z-index: 99999; width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(22,25,34,0.96); border: 1.5px solid #00B894; box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+      transition: transform .28s ease, opacity .28s ease; opacity: 1;
+    }
+    #vetri-fab.docked-right { transform: translateX(26px); opacity: .75; }
+    #vetri-fab.docked-left  { transform: translateX(-26px); opacity: .75; }
+    #vetri-fab.dragging { transition: none; }
+    #vetri-fab svg { width: 22px; height: 22px; }
+    #fab-dot {
+      position: absolute; top: 2px; right: 2px; width: 11px; height: 11px; border-radius: 50%;
+      background: #FDCB6E; border: 2px solid #161922; box-sizing: border-box;
+    }
+    #vetri-panel {
+      position: fixed; z-index: 99998; display: none; flex-direction: column; gap: 8px;
+      width: 220px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 12px;
+      background: rgba(22,25,34,0.98); border: 1px solid #00B894; border-radius: 16px;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.55); font-family: Roboto, sans-serif;
+    }
+    #vetri-panel.open { display: flex; }
+    #vetri-panel .row { display: flex; align-items: center; gap: 8px; }
+    #ble-status-dot { width: 10px; height: 10px; border-radius: 50%; background: #FDCB6E; flex-shrink: 0; }
+    #ble-status-text, #gps-status-text { color: #FFF; font-size: 12px; font-weight: 600; line-height: 1.3; word-break: break-word; }
+    #gps-status-text { color: #B2BEC3; font-weight: 500; font-size: 11px; }
+    #vetri-panel button {
+      border: none; border-radius: 10px; padding: 9px 10px; font-size: 12px; font-weight: bold; color: #FFF;
+      cursor: pointer; outline: none; width: 100%;
+    }
+    #ble-connect-btn { background: #00B894; }
+    #gps-sync-btn { background: #0984E3; }
+    #vetri-panel button:disabled { opacity: .7; cursor: default; }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
 
   <!-- VETRI Web Bluetooth & GPS Bridge for Chrome on Android -->
-  <div id="vetri-ble-banner" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:8px;background:rgba(22,25,34,0.95);border:1px solid #00B894;border-radius:30px;padding:8px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.6);backdrop-filter:blur(8px);font-family:sans-serif;max-width:94vw;box-sizing:border-box;">
-    <span id="ble-status-dot" style="width:10px;height:10px;border-radius:50%;background:#FDCB6E;flex-shrink:0;"></span>
-    <span id="ble-status-text" style="color:#FFF;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">ESP32: Disconnected</span>
-    <button id="ble-connect-btn" onclick="window.vetriWebBleConnect()" style="background:#00B894;color:#FFF;border:none;border-radius:20px;padding:6px 12px;font-size:11px;font-weight:bold;cursor:pointer;outline:none;white-space:nowrap;">Connect Bike</button>
-    <button id="gps-sync-btn" onclick="window.vetriSyncGps()" style="background:#0984E3;color:#FFF;border:none;border-radius:20px;padding:6px 10px;font-size:11px;font-weight:bold;cursor:pointer;outline:none;white-space:nowrap;">📍 Sync Location</button>
+  <div id="vetri-fab" role="button" aria-label="Bluetooth and GPS status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#00B894" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 7l10 10-5 5V2l5 5L7 17"/>
+    </svg>
+    <span id="fab-dot"></span>
+  </div>
+  <div id="vetri-panel">
+    <div class="row"><span id="ble-status-dot"></span><span id="ble-status-text">ESP32: Disconnected</span></div>
+    <div class="row"><span id="gps-status-text">GPS: not synced</span></div>
+    <button id="ble-connect-btn" onclick="window.vetriWebBleConnect()">Connect Bike</button>
+    <button id="gps-sync-btn" onclick="window.vetriSyncGps()">📍 Sync Location</button>
   </div>
 
   <script>
+    (function () {
+      var fab = document.getElementById('vetri-fab');
+      var panel = document.getElementById('vetri-panel');
+      var SIZE = 44, MARGIN = 8, dockTimer = null;
+      var pos = { x: null, y: null };
+
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+      function bounds() { return { w: window.innerWidth, h: window.innerHeight }; }
+
+      function applyPos() {
+        var b = bounds();
+        pos.x = clamp(pos.x, MARGIN, b.w - SIZE - MARGIN);
+        pos.y = clamp(pos.y, 60, b.h - SIZE - MARGIN);
+        fab.style.left = pos.x + 'px';
+        fab.style.top = pos.y + 'px';
+        positionPanel();
+      }
+      function positionPanel() {
+        var b = bounds(), pw = panel.offsetWidth || 220, ph = panel.offsetHeight || 150;
+        var onRight = pos.x + SIZE / 2 > b.w / 2;
+        var left = onRight ? pos.x + SIZE - pw : pos.x;
+        panel.style.left = clamp(left, 12, b.w - pw - 12) + 'px';
+        var above = pos.y - ph - 8;
+        panel.style.top = (above >= 8 ? above : pos.y + SIZE + 8) + 'px';
+      }
+      function snapToEdge() {
+        var b = bounds();
+        pos.x = (pos.x + SIZE / 2 > b.w / 2) ? b.w - SIZE - MARGIN : MARGIN;
+        applyPos();
+        try { localStorage.setItem('vetri_fab', JSON.stringify({ side: pos.x < b.w / 2 ? 'l' : 'r', y: pos.y / b.h })); } catch (e) {}
+      }
+      function scheduleDock() {
+        clearTimeout(dockTimer);
+        dockTimer = setTimeout(function () {
+          if (panel.classList.contains('open')) return;
+          var b = bounds();
+          fab.classList.remove('docked-left', 'docked-right');
+          fab.classList.add(pos.x + SIZE / 2 > b.w / 2 ? 'docked-right' : 'docked-left');
+        }, 2500);
+      }
+      function wake() { fab.classList.remove('docked-left', 'docked-right'); scheduleDock(); }
+
+      // Restore saved edge/height, default: right edge, lower third (clear of page content)
+      (function init() {
+        var b = bounds(), side = 'r', yf = 0.72;
+        try { var s = JSON.parse(localStorage.getItem('vetri_fab') || 'null'); if (s) { side = s.side; yf = s.y; } } catch (e) {}
+        pos.x = side === 'l' ? MARGIN : b.w - SIZE - MARGIN;
+        pos.y = b.h * yf;
+        applyPos(); scheduleDock();
+      })();
+      window.addEventListener('resize', function () { snapToEdge(); });
+
+      // Drag (pointer events) + tap to open/close
+      var drag = null;
+      fab.addEventListener('pointerdown', function (e) {
+        wake();
+        drag = { sx: e.clientX, sy: e.clientY, ox: pos.x, oy: pos.y, moved: false };
+        fab.setPointerCapture(e.pointerId);
+      });
+      fab.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+        if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 6) { drag.moved = true; fab.classList.add('dragging'); panel.classList.remove('open'); }
+        if (drag.moved) { pos.x = drag.ox + dx; pos.y = drag.oy + dy; applyPos(); }
+      });
+      function endDrag(e) {
+        if (!drag) return;
+        var wasDrag = drag.moved; drag = null; fab.classList.remove('dragging');
+        if (wasDrag) { snapToEdge(); scheduleDock(); }
+        else { panel.classList.toggle('open'); positionPanel(); if (!panel.classList.contains('open')) scheduleDock(); }
+      }
+      fab.addEventListener('pointerup', endDrag);
+      fab.addEventListener('pointercancel', function () { drag = null; fab.classList.remove('dragging'); });
+      // Tap anywhere else closes the panel
+      document.addEventListener('pointerdown', function (e) {
+        if (!panel.classList.contains('open')) return;
+        if (panel.contains(e.target) || fab.contains(e.target)) return;
+        panel.classList.remove('open'); scheduleDock();
+      }, true);
+
+      window.vetriSetFabState = function (color) { document.getElementById('fab-dot').style.background = color; };
+    })();
+  </script>
+
+  <script>
+    var PUSH_URL = '/api/telemetry/push';
+
     window.vetriUserLat = 0.0;
     window.vetriUserLng = 0.0;
-    window.vetriGpsSpeed = 0.0;
+    window.vetriGpsSpeed = 0.0;     // km/h, real ground speed from the phone's GPS (0 when stationary)
+    window.vetriGpsFixAt = 0;       // ms timestamp of the last GPS fix
     window.vetriGpsWatchId = null;
+    var vetriLastFix = null, vetriGpsBeat = null;
 
-    // Direct User-Gesture Triggered GPS Sync (Chrome on Android requires user click/gesture for location popup)
-    window.vetriSyncGps = function() {
-      if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser.");
-        return;
-      }
-      const gpsBtn = document.getElementById('gps-sync-btn');
-      if (gpsBtn) {
-        gpsBtn.innerText = "Locating...";
-        gpsBtn.style.background = "#E17055";
-      }
+    function vetriHaversineM(a, b) {
+      var R = 6371000, r = Math.PI / 180;
+      var dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+      var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * R * Math.asin(Math.sqrt(x));
+    }
+
+    // Current speed that is safe to report: 0 if the GPS has gone quiet for >6 s.
+    function vetriCurrentGpsSpeed() {
+      if (!window.vetriGpsFixAt || Date.now() - window.vetriGpsFixAt > 6000) return 0.0;
+      return window.vetriGpsSpeed || 0.0;
+    }
+    function vetriPushGps() {
+      if (!window.vetriGpsFixAt) return;
+      fetch(PUSH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: 'ESP32-VETRI-OBD', raw_packet: 'GPS_LOCK',
+          lat: window.vetriUserLat, lng: window.vetriUserLng, gps_speed: vetriCurrentGpsSpeed()
+        })
+      }).catch(function () {});
+    }
+
+    // Must be triggered from a user gesture on Chrome/Android for the location prompt to appear.
+    window.vetriSyncGps = function () {
+      if (!navigator.geolocation) { alert("Geolocation is not supported by your browser."); return; }
+      var gpsBtn = document.getElementById('gps-sync-btn');
+      var gpsTxt = document.getElementById('gps-status-text');
+      if (gpsBtn) { gpsBtn.innerText = "Locating..."; gpsBtn.style.background = "#E17055"; }
 
       function onPos(pos) {
-        window.vetriUserLat = pos.coords.latitude;
-        window.vetriUserLng = pos.coords.longitude;
-        if (pos.coords.speed !== null && pos.coords.speed >= 0) {
-          window.vetriGpsSpeed = Math.round(pos.coords.speed * 3.6 * 10) / 10;
+        var c = pos.coords, t = pos.timestamp || Date.now();
+        var cur = { lat: c.latitude, lng: c.longitude, t: t };
+        var kmh = null;
+        if (c.speed !== null && c.speed !== undefined && !isNaN(c.speed) && c.speed >= 0) {
+          kmh = c.speed * 3.6;                                     // Doppler speed from the GPS chip
+        } else if (vetriLastFix && t - vetriLastFix.t >= 700 && (c.accuracy || 99) <= 40) {
+          kmh = vetriHaversineM(vetriLastFix, cur) / ((t - vetriLastFix.t) / 1000) * 3.6;  // distance / time
         }
-        if (gpsBtn) {
-          gpsBtn.innerText = "📍 GPS Locked";
-          gpsBtn.style.background = "#2D3436";
-        }
-        console.log("[VETRI GPS] Locked:", window.vetriUserLat, window.vetriUserLng, "Speed:", window.vetriGpsSpeed);
-
-        const pushTarget = window.location.hostname.includes('ve-triage')
-          ? 'https://vetri-predictive-triage.onrender.com/api/telemetry/push'
-          : '/api/telemetry/push';
-        fetch(pushTarget, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            device_id: 'ESP32-VETRI-OBD',
-            raw_packet: 'GPS_LOCK',
-            lat: window.vetriUserLat,
-            lng: window.vetriUserLng,
-            gps_speed: window.vetriGpsSpeed
-          })
-        }).catch(function() {});
+        if (kmh === null) kmh = window.vetriGpsSpeed || 0;
+        if ((c.accuracy || 0) > 60) kmh = window.vetriGpsSpeed || 0;  // poor fix: keep last value
+        window.vetriGpsSpeed = kmh < 3 ? 0 : Math.round(kmh * 10) / 10;   // <3 km/h = GPS drift at standstill
+        vetriLastFix = cur;
+        window.vetriUserLat = c.latitude;
+        window.vetriUserLng = c.longitude;
+        window.vetriGpsFixAt = Date.now();
+        if (gpsBtn) { gpsBtn.innerText = "📍 GPS Locked"; gpsBtn.style.background = "#2D3436"; }
+        if (gpsTxt) gpsTxt.innerText = "GPS: " + c.latitude.toFixed(4) + ", " + c.longitude.toFixed(4) + " • " + window.vetriGpsSpeed + " km/h";
       }
-
       function onErr(err) {
         console.warn("[VETRI GPS] Error:", err.message);
-        if (gpsBtn) {
-          gpsBtn.innerText = "📍 Tap for GPS";
-          gpsBtn.style.background = "#D63031";
-        }
+        if (gpsBtn) { gpsBtn.innerText = "📍 Tap for GPS"; gpsBtn.style.background = "#D63031"; }
+        if (gpsTxt) gpsTxt.innerText = "GPS: " + (err.code === 1 ? "permission denied - allow location for this site" : "no fix");
       }
 
-      navigator.geolocation.getCurrentPosition(onPos, onErr, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 1000
-      });
-
+      navigator.geolocation.getCurrentPosition(onPos, onErr, { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 });
       if (!window.vetriGpsWatchId) {
-        window.vetriGpsWatchId = navigator.geolocation.watchPosition(onPos, onErr, {
-          enableHighAccuracy: true,
-          maximumAge: 1000
-        });
+        window.vetriGpsWatchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 0 });
       }
+      // 1 Hz heartbeat keeps the server's speed fresh, and drops it to 0 when GPS goes quiet.
+      if (!vetriGpsBeat) vetriGpsBeat = setInterval(vetriPushGps, 1000);
     };
 
-    window.vetriWebBleConnect = async function() {
-      // Proactively trigger GPS permission popup within this click user-gesture
-      window.vetriSyncGps();
+    window.vetriWebBleConnect = async function () {
+      window.vetriSyncGps();   // request location inside this tap
 
-      const btn = document.getElementById('ble-connect-btn');
-      const text = document.getElementById('ble-status-text');
-      const dot = document.getElementById('ble-status-dot');
+      var btn = document.getElementById('ble-connect-btn');
+      var text = document.getElementById('ble-status-text');
+      var dot = document.getElementById('ble-status-dot');
+      function state(color) { dot.style.background = color; window.vetriSetFabState(color); }
 
       if (!navigator.bluetooth) {
         alert("Web Bluetooth requires Google Chrome on Android or Desktop over HTTPS.\n\nTip: You can also download and install VETRI_Final.apk for native Bluetooth connection.");
@@ -122,46 +253,44 @@
         btn.innerText = "Pairing...";
         btn.disabled = true;
 
-        const device = await navigator.bluetooth.requestDevice({
+        var device = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'ESP32-VETRI-OBD' }],
           optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
         });
 
         text.innerText = "Connecting GATT...";
-        const server = await device.gatt.connect();
+        var server = await device.gatt.connect();
 
-        device.addEventListener('gattserverdisconnected', () => {
+        device.addEventListener('gattserverdisconnected', function () {
           text.innerText = "ESP32: Disconnected";
-          dot.style.background = "#FF7675";
+          state("#FF7675");
           btn.innerText = "Reconnect";
+          btn.style.background = "#00B894";
           btn.disabled = false;
         });
 
-        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-        const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+        var service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        var txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
 
-        let bleBuffer = "";
-        let packetCount = 0;
-        let lastPushTime = 0;
+        var bleBuffer = "";
+        var packetCount = 0;
+        var lastPushTime = 0;
 
         await txChar.startNotifications();
-        txChar.addEventListener('characteristicvaluechanged', (e) => {
-          const chunk = new TextDecoder().decode(e.target.value);
+        txChar.addEventListener('characteristicvaluechanged', function (e) {
+          var chunk = new TextDecoder().decode(e.target.value);
           bleBuffer += chunk;
           while (bleBuffer.includes('\n')) {
-            const idx = bleBuffer.indexOf('\n');
-            const line = bleBuffer.substring(0, idx).trim();
+            var idx = bleBuffer.indexOf('\n');
+            var line = bleBuffer.substring(0, idx).trim();
             bleBuffer = bleBuffer.substring(idx + 1);
             if (line.length > 0 && (line.includes('RPM:') || line.includes('0x7E8') || line.includes('NO_SIGNAL') || line.startsWith('{'))) {
               packetCount++;
               text.innerText = "LIVE (" + packetCount + " pkts)";
-              const now = Date.now();
+              var now = Date.now();
               if (now - lastPushTime >= 150) {
                 lastPushTime = now;
-                const pushTarget = window.location.hostname.includes('ve-triage')
-                  ? 'https://vetri-predictive-triage.onrender.com/api/telemetry/push'
-                  : '/api/telemetry/push';
-                fetch(pushTarget, {
+                fetch(PUSH_URL, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -169,23 +298,23 @@
                     raw_packet: line,
                     lat: window.vetriUserLat || 0.0,
                     lng: window.vetriUserLng || 0.0,
-                    gps_speed: window.vetriGpsSpeed || 0.0
+                    gps_speed: vetriCurrentGpsSpeed()
                   })
-                }).catch(() => {});
+                }).catch(function () {});
               }
             }
           }
         });
 
         text.innerText = "LIVE (Streaming)";
-        dot.style.background = "#00B894";
+        state("#00B894");
         btn.innerText = "Connected";
         btn.style.background = "#2D3436";
         btn.disabled = true;
       } catch (err) {
         console.error("BLE Connect Error:", err);
         text.innerText = "Pairing Cancelled";
-        dot.style.background = "#FF7675";
+        state("#FF7675");
         btn.innerText = "Retry Connect";
         btn.disabled = false;
       }

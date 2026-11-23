@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
 import 'subscription_screen.dart';
 import 'ble_pairing_screen.dart';
+import '../theme/app_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -133,16 +134,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool hasPhone = provider.phoneNumber.trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0E15),
+      backgroundColor: AppColors.scaffold(context),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+          icon: Icon(Icons.menu_rounded, color: AppColors.icon(context), size: 26),
           onPressed: widget.onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
         ),
-        title: const Text('Profile & Account',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text('Profile & Account',
+            style: TextStyle(color: AppColors.text(context), fontSize: 18, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -161,9 +162,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Row(
                   children: [
@@ -183,8 +184,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Text(
                             provider.displayName,
-                            style: const TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                            style: TextStyle(
+                                color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 18),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -289,11 +290,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: const Icon(Icons.workspace_premium_rounded,
                         color: Color(0xFF6C5CE7), size: 24),
                   ),
-                  title: const Text('Subscription Plans',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  title: Text('Subscription Plans',
+                      style: TextStyle(color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 15)),
                   subtitle: Text('Active: ${provider.subscriptionTier} • Tap to view duration plans',
-                      style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF8E92A4), size: 16),
+                      style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
+                  trailing: Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textSecondary(context), size: 16),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
@@ -308,31 +309,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Column(
                   children: [
                     ListTile(
                       leading: const Icon(Icons.person_outline_rounded, color: Color(0xFF6C5CE7)),
-                      title: const Text('Full Name', style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                      title: Text('Full Name', style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                       subtitle: Text(provider.displayName,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(
+                              color: AppColors.text(context), fontWeight: FontWeight.w600, fontSize: 14)),
                       trailing: IconButton(
                         icon: const Icon(Icons.edit_rounded, color: Color(0xFF6C5CE7), size: 18),
                         onPressed: () => _showEditProfileDialog(provider),
                       ),
                     ),
-                    const Divider(height: 1, color: Color(0xFF232736)),
+                    Divider(height: 1, color: AppColors.border(context)),
                     ListTile(
                       leading: const Icon(Icons.email_outlined, color: Color(0xFF6C5CE7)),
-                      title: const Text('Email Address', style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                      title: Text('Email Address', style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                       subtitle: hasEmail
                           ? Text(provider.userEmail,
-                              style: const TextStyle(
-                                  color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))
+                              style: TextStyle(
+                                  color: AppColors.text(context), fontWeight: FontWeight.w600, fontSize: 14))
                           : const Text('⚠️ Not Set (Required for PDF Reports)',
                               style: TextStyle(
                                   color: Color(0xFFFDCB6E), fontWeight: FontWeight.w600, fontSize: 13)),
@@ -345,14 +346,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             )
                           : null,
                     ),
-                    const Divider(height: 1, color: Color(0xFF232736)),
+                    Divider(height: 1, color: AppColors.border(context)),
                     ListTile(
                       leading: const Icon(Icons.phone_android_rounded, color: Color(0xFF00B894)),
-                      title: const Text('Registered Phone (SMS / OTP)', style: TextStyle(color: Color(0xFF8E92A4), fontSize: 12)),
+                      title: Text('Registered Phone (SMS / OTP)', style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                       subtitle: hasPhone
                           ? Text(provider.phoneNumber,
-                              style: const TextStyle(
-                                  color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))
+                              style: TextStyle(
+                                  color: AppColors.text(context), fontWeight: FontWeight.w600, fontSize: 14))
                           : const Text('⚠️ Not Set (Required for Emergency SMS)',
                               style: TextStyle(
                                   color: Color(0xFFFDCB6E), fontWeight: FontWeight.w600, fontSize: 13)),
@@ -375,20 +376,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Column(
                   children: [
                     ListTile(
                       leading: const Icon(Icons.directions_car_rounded, color: Color(0xFF00B894)),
                       title: Text(provider.vehicleName,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                          style: TextStyle(
+                              color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 15)),
                       subtitle: Text(
                         'Type: ${provider.vehicleType}\nVIN: ${provider.vehicleVin}\nOdometer: ${provider.odometerKm} km',
-                        style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 12),
+                        style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12),
                       ),
                       isThreeLine: true,
                       trailing: IconButton(
@@ -406,29 +407,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Column(
                   children: [
                     SwitchListTile(
                       secondary: const Icon(Icons.notifications_active_outlined, color: Color(0xFF6C5CE7)),
-                      title: const Text('Push Telemetry Alerts',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                      subtitle: const Text('Real-time notification on DTC fault detection',
-                          style: TextStyle(color: Color(0xFF8E92A4), fontSize: 11)),
+                      title: Text('Push Telemetry Alerts',
+                          style: TextStyle(color: AppColors.text(context), fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text('Real-time notification on DTC fault detection',
+                          style: TextStyle(color: AppColors.textSecondary(context), fontSize: 11)),
                       value: provider.pushNotifications,
                       activeThumbColor: const Color(0xFF6C5CE7),
                       onChanged: (val) => provider.updateNotificationSettings(push: val),
                     ),
-                    const Divider(height: 1, color: Color(0xFF232736)),
+                    Divider(height: 1, color: AppColors.border(context)),
                     SwitchListTile(
                       secondary: const Icon(Icons.sms_outlined, color: Color(0xFF00B894)),
-                      title: const Text('Emergency SMS Triage',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                      subtitle: const Text('Send instant SMS alert to emergency contacts on CRITICAL risk',
-                          style: TextStyle(color: Color(0xFF8E92A4), fontSize: 11)),
+                      title: Text('Emergency SMS Triage',
+                          style: TextStyle(color: AppColors.text(context), fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: Text('Send instant SMS alert to emergency contacts on CRITICAL risk',
+                          style: TextStyle(color: AppColors.textSecondary(context), fontSize: 11)),
                       value: provider.criticalSmsAlerts,
                       activeThumbColor: const Color(0xFF00B894),
                       onChanged: (val) => provider.updateNotificationSettings(sms: val),

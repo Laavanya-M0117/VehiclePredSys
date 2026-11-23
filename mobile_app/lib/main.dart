@@ -30,6 +30,11 @@ class VehiclePredictiveTriageApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xFFF5F6FA),
             primaryColor: const Color(0xFF6C5CE7),
             cardColor: Colors.white,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFFF5F6FA),
+              foregroundColor: Color(0xFF1B1F2E),
+              elevation: 0,
+            ),
             colorScheme: const ColorScheme.light(
               primary: Color(0xFF6C5CE7),
               secondary: Color(0xFF00B894),
@@ -43,6 +48,11 @@ class VehiclePredictiveTriageApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xFF0D0E15),
             primaryColor: const Color(0xFF6C5CE7),
             cardColor: const Color(0xFF161922),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF0D0E15),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             colorScheme: const ColorScheme.dark(
               primary: Color(0xFF6C5CE7),
               secondary: Color(0xFF00B894),

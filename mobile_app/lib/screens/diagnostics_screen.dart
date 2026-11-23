@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../providers/app_state_provider.dart';
 import '../widgets/rotating_wheel.dart';
+import '../theme/app_colors.dart';
 
 class DiagnosticsScreen extends StatelessWidget {
   final VoidCallback? onOpenDrawer;
@@ -23,13 +24,7 @@ class DiagnosticsScreen extends StatelessWidget {
       rpmSpots.add(FlSpot(i.toDouble(), provider.rpmHistory[i]));
     }
     if (rpmSpots.isEmpty) {
-      rpmSpots.addAll(const [
-        FlSpot(0, 2200),
-        FlSpot(1, 2800),
-        FlSpot(2, 3400),
-        FlSpot(3, 3100),
-        FlSpot(4, 3800)
-      ]);
+      rpmSpots.addAll(const [FlSpot(0, 0), FlSpot(1, 0)]);
     }
 
     final List<FlSpot> speedSpots = [];
@@ -37,21 +32,29 @@ class DiagnosticsScreen extends StatelessWidget {
       speedSpots.add(FlSpot(i.toDouble(), provider.speedHistory[i]));
     }
     if (speedSpots.isEmpty) {
-      speedSpots.addAll(
-          const [FlSpot(0, 30), FlSpot(1, 45), FlSpot(2, 60), FlSpot(3, 55), FlSpot(4, 70)]);
+      speedSpots.addAll(const [FlSpot(0, 0), FlSpot(1, 0)]);
     }
 
+    // Battery voltage: only real readings are plotted; gaps where the ECU gave no value
+    final List<FlSpot> voltSpots = [];
+    for (int i = 0; i < provider.voltageHistory.length; i++) {
+      final v = provider.voltageHistory[i];
+      voltSpots.add(v > 0 ? FlSpot(i.toDouble(), v.clamp(9.0, 16.0)) : FlSpot.nullSpot);
+    }
+    if (voltSpots.length < 2) voltSpots.addAll([FlSpot.nullSpot, FlSpot.nullSpot]);
+    final bool hasVolt = provider.hasLiveVoltage;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0E15),
+      backgroundColor: AppColors.scaffold(context),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+          icon: Icon(Icons.menu_rounded, color: AppColors.icon(context), size: 26),
           onPressed: onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
         ),
-        title: const Text('Live Diagnostics & Graphs',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text('Live Diagnostics',
+            style: TextStyle(color: AppColors.text(context), fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
@@ -82,9 +85,9 @@ class DiagnosticsScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Row(
                   children: [
@@ -144,6 +147,7 @@ class DiagnosticsScreen extends StatelessWidget {
 
               // Live RPM Line Chart
               _buildChartCard(
+                context,
                 title: 'Real-Time RPM Stream (0 - 9,000 RPM)',
                 color: const Color(0xFF6C5CE7),
                 spots: rpmSpots,
@@ -155,6 +159,7 @@ class DiagnosticsScreen extends StatelessWidget {
 
               // Live Speed Line Chart
               _buildChartCard(
+                context,
                 title: 'Real-Time Speed Stream (0 - 160 km/h)',
                 color: const Color(0xFF00B894),
                 spots: speedSpots,
@@ -164,11 +169,25 @@ class DiagnosticsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
+              // Live Battery Voltage Line Chart (real ECU / sensor readings only)
+              _buildChartCard(
+                context,
+                title: 'Real-Time Battery Voltage Stream (9 - 16 V)',
+                color: const Color(0xFFFDCB6E),
+                spots: voltSpots,
+                minY: 9,
+                maxY: 16,
+                unit: 'V',
+                emptyNote: hasVolt ? null : 'No battery voltage received from the ECU yet',
+              ),
+              const SizedBox(height: 20),
+
               // Aux Sensors Row
               Row(
                 children: [
                   Expanded(
                     child: _buildMiniCard(
+                      context,
                       title: 'Coolant Temp',
                       value: '${currentCoolant.toStringAsFixed(1)} °C',
                       icon: Icons.thermostat_rounded,
@@ -180,8 +199,9 @@ class DiagnosticsScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMiniCard(
+                      context,
                       title: 'Battery Voltage',
-                      value: '${currentVoltage.toStringAsFixed(2)} V',
+                      value: hasVolt ? '${currentVoltage.toStringAsFixed(2)} V' : '-- V',
                       icon: Icons.bolt_rounded,
                       color: const Color(0xFFFDCB6E),
                     ),
@@ -189,6 +209,7 @@ class DiagnosticsScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildMiniCard(
+                      context,
                       title: 'Fuel Trim',
                       value:
                           '${fuelTrim >= 0 ? '+' : ''}${fuelTrim.toStringAsFixed(1)} %',
@@ -206,20 +227,22 @@ class DiagnosticsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildChartCard({
+  Widget _buildChartCard(
+    BuildContext context, {
     required String title,
     required Color color,
     required List<FlSpot> spots,
     required double minY,
     required double maxY,
     required String unit,
+    String? emptyNote,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF161922),
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF232736)),
+        border: Border.all(color: AppColors.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,11 +250,14 @@ class DiagnosticsScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                      color: AppColors.text(context), fontSize: 13, fontWeight: FontWeight.bold),
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -247,7 +273,10 @@ class DiagnosticsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             height: 150,
-            child: LineChart(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+            LineChart(
               LineChartData(
                 minX: 0,
                 maxX: spots.length > 1 ? (spots.length - 1).toDouble() : 10,
@@ -257,7 +286,7 @@ class DiagnosticsScreen extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   getDrawingHorizontalLine: (val) =>
-                      const FlLine(color: Color(0xFF232736), strokeWidth: 1),
+                      FlLine(color: AppColors.border(context), strokeWidth: 1),
                 ),
                 titlesData: const FlTitlesData(show: false),
                 borderData: FlBorderData(show: false),
@@ -278,13 +307,20 @@ class DiagnosticsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (emptyNote != null)
+              Text(emptyNote,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary(context), fontSize: 11)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMiniCard({
+  Widget _buildMiniCard(
+    BuildContext context, {
     required String title,
     required String value,
     required IconData icon,
@@ -293,9 +329,9 @@ class DiagnosticsScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161922),
+        color: AppColors.card(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF232736)),
+        border: Border.all(color: AppColors.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,13 +339,13 @@ class DiagnosticsScreen extends StatelessWidget {
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 8),
           Text(title,
-              style: const TextStyle(color: Color(0xFF8E92A4), fontSize: 10),
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 10),
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Text(value,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              style: TextStyle(
+                  color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );

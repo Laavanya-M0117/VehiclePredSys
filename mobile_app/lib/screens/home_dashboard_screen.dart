@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state_provider.dart';
 import '../widgets/rotating_wheel.dart';
 import '../widgets/vehicle_speed_animation.dart';
+import '../theme/app_colors.dart';
 
 class HomeDashboardScreen extends StatelessWidget {
   final VoidCallback? onOpenDrawer;
@@ -180,25 +181,25 @@ class HomeDashboardScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0E15),
+      backgroundColor: AppColors.scaffold(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D0E15),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+          icon: Icon(Icons.menu_rounded, color: AppColors.icon(context), size: 26),
           onPressed: onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_getDynamicGreeting(),
-                style: const TextStyle(
-                    color: Color(0xFF8E92A4), fontSize: 11, fontWeight: FontWeight.w500)),
+                style: TextStyle(
+                    color: AppColors.textSecondary(context), fontSize: 11, fontWeight: FontWeight.w500)),
             Text(
               provider.displayName.isNotEmpty
                   ? provider.displayName.toUpperCase()
                   : 'VETRI DRIVER',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: AppColors.text(context), fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -225,19 +226,20 @@ class HomeDashboardScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.calendar_today_rounded, color: Color(0xFF8E92A4), size: 14),
+                        Icon(Icons.calendar_today_rounded, color: AppColors.textSecondary(context), size: 14),
                         const SizedBox(width: 8),
                         Text(_getFormattedDate(),
-                            style: const TextStyle(
-                                color: Color(0xFFD1D5DB), fontSize: 12, fontWeight: FontWeight.w500)),
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context), fontSize: 12, fontWeight: FontWeight.w500)),
                       ],
                     ),
                     InkWell(
@@ -378,14 +380,15 @@ class HomeDashboardScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161922),
+                  color: AppColors.card(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF232736)),
+                  border: Border.all(color: AppColors.border(context)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildCompactChip(
+                      context,
                       icon: Icons.speed_rounded,
                       label: 'SPEED',
                       val: '${provider.speed.toStringAsFixed(0)}',
@@ -393,6 +396,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       color: const Color(0xFF00B894),
                     ),
                     _buildCompactChip(
+                      context,
                       icon: Icons.rotate_right_rounded,
                       label: 'RPM',
                       val: '${provider.rpm.toInt()}',
@@ -400,6 +404,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       color: const Color(0xFF6C5CE7),
                     ),
                     _buildCompactChip(
+                      context,
                       icon: Icons.thermostat_rounded,
                       label: 'TEMP',
                       val: provider.coolantTemp > 0 ? '${provider.coolantTemp.toStringAsFixed(0)}' : '--',
@@ -407,6 +412,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       color: provider.coolantTemp > 105 ? const Color(0xFFFF7675) : const Color(0xFF00B894),
                     ),
                     _buildCompactChip(
+                      context,
                       icon: Icons.bolt_rounded,
                       label: 'BATTERY',
                       val: provider.batteryVoltage > 0 ? provider.batteryVoltage.toStringAsFixed(1) : '--',
@@ -414,6 +420,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       color: const Color(0xFFFDCB6E),
                     ),
                     _buildCompactChip(
+                      context,
                       icon: Icons.local_gas_station_rounded,
                       label: 'STFT',
                       val: '${provider.fuelTrim >= 0 ? "+" : ""}${provider.fuelTrim.toStringAsFixed(1)}',
@@ -421,6 +428,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       color: const Color(0xFFA29BFE),
                     ),
                     _buildCompactChip(
+                      context,
                       icon: Icons.tune_rounded,
                       label: 'TPS',
                       val: '${provider.tps.toStringAsFixed(0)}',
@@ -440,7 +448,7 @@ class HomeDashboardScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF161922),
+                      AppColors.card(context),
                       triageColor.withValues(alpha: 0.12),
                     ],
                     begin: Alignment.topLeft,
@@ -462,7 +470,7 @@ class HomeDashboardScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
+                        Expanded(child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(6),
@@ -473,11 +481,13 @@ class HomeDashboardScreen extends StatelessWidget {
                               child: Icon(Icons.auto_awesome_rounded, color: triageColor, size: 16),
                             ),
                             const SizedBox(width: 8),
-                            Column(
+                            Expanded(child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   'PART 1: REAL-TIME AI DIAGNOSTIC TRIAGE',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: Color(0xFF8E92A4),
                                     fontSize: 10,
@@ -492,16 +502,19 @@ class HomeDashboardScreen extends StatelessWidget {
                                       : (triage == 'LOW'
                                           ? 'Nominal J-Series Operation'
                                           : (triage == 'MEDIUM' ? 'Early Anomaly Detected' : 'Critical Fault Condition')),
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.text(context),
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
-                            ),
+                            )),
                           ],
-                        ),
+                        )),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
@@ -712,9 +725,9 @@ class HomeDashboardScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D0E15),
+                        color: AppColors.cardSubtle(context),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF232736)),
+                        border: Border.all(color: AppColors.border(context)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -724,7 +737,7 @@ class HomeDashboardScreen extends StatelessWidget {
                           Expanded(
                             child: Text(
                               provider.history5DayDrivingSummary,
-                              style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 11.5, height: 1.35),
+                              style: TextStyle(color: AppColors.text(context), fontSize: 11.5, height: 1.35),
                             ),
                           ),
                         ],
@@ -877,7 +890,8 @@ class HomeDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactChip({
+  Widget _buildCompactChip(
+    BuildContext context, {
     required IconData icon,
     required String label,
     required String val,
@@ -891,16 +905,16 @@ class HomeDashboardScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           val,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: AppColors.text(context),
             fontSize: 13,
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
           unit,
-          style: const TextStyle(
-            color: Color(0xFF8E92A4),
+          style: TextStyle(
+            color: AppColors.textSecondary(context),
             fontSize: 9,
           ),
         ),
@@ -928,8 +942,8 @@ class HomeDashboardScreen extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                style: TextStyle(
+                    color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 12),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),

@@ -69,11 +69,20 @@ uint32_t last_query_ms     = 0;
 uint32_t last_stream_tx_ms = 0;
 uint32_t last_profile_sw_ms = 0;
 uint8_t  query_pid_idx     = 0;
+uint32_t last_speed_ms     = 0;   // last time the ECU answered PID 0x0D (vehicle speed)
+uint32_t last_volt_ms      = 0;   // last time the ECU answered PID 0x42 (control module voltage)
+
+// OPTIONAL: measure battery voltage directly with an ESP32 ADC pin through a resistor divider
+// (30k from +12V to GPIO34, 7.5k from GPIO34 to GND => ratio 5.0). Leave at 0 unless you wired it.
+#define USE_ADC_BATTERY_SENSE 0
+#define ADC_BATTERY_PIN       34
+#define ADC_DIVIDER_RATIO     5.0f
 
 // Standard OBD-II Mode 01 PIDs for Royal Enfield Classic 350 J-Series
 // Note: Air/Oil cooled engine does not have liquid coolant (PID 0x05)
 // Prioritize: 0x0C (RPM - verified working), 0x11 (Throttle Position), 0x0D (Speed)
-const uint8_t OBD_PIDS[] = { 0x0C, 0x11, 0x0C, 0x0D };
+// 0x42 = Control module (battery) voltage. RPM is polled most often.
+const uint8_t OBD_PIDS[] = { 0x0C, 0x11, 0x0C, 0x0D, 0x0C, 0x42 };
 const uint8_t NUM_PIDS = sizeof(OBD_PIDS) / sizeof(OBD_PIDS[0]);
 
 // Multi-speed profile probe (Cycles between 500k and 250k, 8MHz and 16MHz)
@@ -276,8 +285,13 @@ void loop() {
           // Engine RPM = ((A * 256) + B) / 4
           vehicle_rpm = ((uint16_t)rx.data[3] * 256 + rx.data[4]) / 4;
         } else if (pid == 0x0D && rx.can_dlc >= 4) {
-          // Vehicle Speed
+          // Vehicle Speed (wheel speed as reported by the ECU)
           vehicle_speed = (float)rx.data[3];
+          last_speed_ms = now;
+        } else if (pid == 0x42 && rx.can_dlc >= 5) {
+          // Control module voltage = ((A * 256) + B) / 1000  [V]  -> real battery / charging voltage
+          battery_volt = ((float)((uint16_t)rx.data[3] * 256 + rx.data[4])) / 1000.0f;
+          last_volt_ms = now;
         } else if (pid == 0x05 && rx.can_dlc >= 4) {
           // Engine Coolant / Oil Temperature (°C)
           coolant_temp = (float)rx.data[3] - 40.0;
@@ -312,18 +326,26 @@ void loop() {
   bool is_vehicle_active = (last_ecu_reply_ms > 0) && (now - last_ecu_reply_ms < 3500);
 
   if (is_vehicle_active) {
-    battery_volt = 14.15; // Charging voltage while engine running
     fuel_stft    = 1.5;
     active_dtc   = (coolant_temp > 105.0) ? "P0217" : "NO FAULT";
 
-    // Dynamic Real-Time Vehicle Speed:
-    // If ECU does not report Mode 01 PID 0x0D (Euro 5 BS6 bikes where ABS module handles speed):
-    if (vehicle_speed <= 0.0 && vehicle_rpm > 1200) {
-      float est_spd = (float)(vehicle_rpm - 1050) * 0.024f;
-      if (est_spd > 0.0f) vehicle_speed = est_spd;
-    } else if (vehicle_rpm <= 1180) {
-      vehicle_speed = 0.0;
+    // SPEED: only ever the value the ECU reports for PID 0x0D. It is NOT derived from RPM,
+    // because RPM also rises while the bike is idling / revving in neutral. If the ECU does not
+    // answer (some BS6 bikes keep wheel speed on the ABS unit) we report 0 and the phone's GPS
+    // ground speed supplies the real road speed instead.
+    if (now - last_speed_ms > 3000) vehicle_speed = 0.0;
+
+    // BATTERY VOLTAGE: only real measurements (ECU PID 0x42, or optional ADC divider).
+    // No answer -> 0.00 (the app shows '--') instead of a made-up charging voltage.
+#if USE_ADC_BATTERY_SENSE
+    {
+      uint32_t acc = 0;
+      for (int i = 0; i < 8; i++) acc += analogReadMilliVolts(ADC_BATTERY_PIN);
+      battery_volt = (acc / 8.0f) / 1000.0f * ADC_DIVIDER_RATIO;
+      last_volt_ms = now;
     }
+#endif
+    if (now - last_volt_ms > 3000) battery_volt = 0.0;
   } else {
     // BIKE OFF / STANDBY - HONEST ZEROES
     vehicle_rpm   = 0;

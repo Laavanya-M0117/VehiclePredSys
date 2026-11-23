@@ -393,18 +393,26 @@ def push_live_telemetry(req: TelemetryPushRequest):
     Receives live raw OBD telemetry streamed from Arduino/HC-05 hardware bridge.
     """
     prev = latest_live_telemetry.get(req.device_id, {})
-    lat = req.lat if (req.lat is not None and req.lat != 0.0) else prev.get("lat")
-    lng = req.lng if (req.lng is not None and req.lng != 0.0) else prev.get("lng")
-    gps_speed = req.gps_speed if req.gps_speed is not None else prev.get("gps_speed")
+    now_ts = time.time()
+    entry = dict(prev) if prev else {"raw_packet": "", "timestamp": 0.0, "received_at": ""}
 
-    latest_live_telemetry[req.device_id] = {
-        "raw_packet": req.raw_packet,
-        "timestamp": time.time(),
-        "received_at": time.strftime("%H:%M:%S"),
-        "lat": lat,
-        "lng": lng,
-        "gps_speed": gps_speed
-    }
+    # Phone GPS fix (lat/lng/ground-speed). Track its own freshness so a stale
+    # speed is never reported once the phone stops reporting.
+    if req.lat is not None and req.lat != 0.0 and req.lng is not None and req.lng != 0.0:
+        entry["lat"] = req.lat
+        entry["lng"] = req.lng
+    if req.gps_speed is not None:
+        entry["gps_speed"] = max(0.0, req.gps_speed)
+        entry["gps_ts"] = now_ts
+
+    # A GPS-only push must NOT overwrite the OBD packet or its freshness stamp,
+    # otherwise the dashboard would think the bike is still streaming.
+    if req.raw_packet != "GPS_LOCK":
+        entry["raw_packet"] = req.raw_packet
+        entry["timestamp"] = now_ts
+        entry["received_at"] = time.strftime("%H:%M:%S")
+
+    latest_live_telemetry[req.device_id] = entry
     return {"status": "ok", "device_id": req.device_id, "timestamp": time.time()}
 
 @app.get("/api/telemetry/live", tags=["Telemetry Relay"])
@@ -441,7 +449,8 @@ def get_live_telemetry(device_id: Optional[str] = None):
         "received_at": target_data.get("received_at", ""),
         "lat": target_data.get("lat"),
         "lng": target_data.get("lng"),
-        "gps_speed": target_data.get("gps_speed")
+        "gps_speed": target_data.get("gps_speed"),
+        "gps_age_seconds": round(now - target_data["gps_ts"], 2) if target_data.get("gps_ts") else None
     }
 
 # Mount Flutter Web App as unified single-port frontend (serves PWA, assets, and summary PDF)
