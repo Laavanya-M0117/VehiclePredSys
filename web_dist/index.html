@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base href="/">
+  <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -128,6 +128,21 @@
         applyPos(); scheduleDock();
       })();
       window.addEventListener('resize', function () { snapToEdge(); });
+
+      // Automatically hide the Web Bluetooth button when authenticated on the main dashboard,
+      // and display it only on the initial Bluetooth pairing / connection screen
+      setInterval(function () {
+        var isAuth = false;
+        try {
+          isAuth = localStorage.getItem('flutter.is_authenticated') === 'true';
+        } catch (e) {}
+        if (isAuth) {
+          fab.style.display = 'none';
+          panel.style.display = 'none';
+        } else {
+          fab.style.display = 'flex';
+        }
+      }, 400);
 
       // Drag (pointer events) + tap to open/close
       var drag = null;

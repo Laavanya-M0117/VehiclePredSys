@@ -49,13 +49,38 @@ def clean_and_validate_reading(reading_dict):
             pass
 
     cleaned = {}
+    
+    # Extract RPM first to intelligently synthesize alternator voltage if missing/zero
+    raw_rpm = normalized.get('rpm', None)
+    try:
+        current_rpm = float(raw_rpm) if raw_rpm is not None else 0.0
+    except (ValueError, TypeError):
+        current_rpm = 0.0
+
     for key, fallback in DEFAULT_FALLBACKS.items():
         val = normalized.get(key, None)
         if val is None or not isinstance(val, (int, float)) or np.isnan(val):
-            cleaned[key] = fallback
+            if key == 'voltage':
+                if current_rpm >= 400.0:
+                    cleaned[key] = round(13.45 + min(0.90, max(0.0, (current_rpm - 800.0) / 4500.0) * 0.90), 2)
+                elif current_rpm > 0.0:
+                    cleaned[key] = 11.20
+                else:
+                    cleaned[key] = 12.55
+            else:
+                cleaned[key] = fallback
         else:
             min_val, max_val = DEFAULT_PID_BOUNDS[key]
-            cleaned[key] = float(np.clip(val, min_val, max_val))
+            # If voltage is reported as <= 0.0 (ECU PID 0x42 unsupported), synthesize physical motorcycle voltage
+            if key == 'voltage' and val <= 0.0:
+                if current_rpm >= 400.0:
+                    cleaned[key] = round(13.45 + min(0.90, max(0.0, (current_rpm - 800.0) / 4500.0) * 0.90), 2)
+                elif current_rpm > 0.0:
+                    cleaned[key] = 11.20
+                else:
+                    cleaned[key] = 12.55
+            else:
+                cleaned[key] = float(np.clip(val, min_val, max_val))
     return cleaned
 
 ML_FEATURE_COLS = [

@@ -27,20 +27,41 @@ except ImportError:
 
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-demo-key-for-vehicle-predictive-triage-2026")
 
-REGISTERED_USERS = {
-    "alex.martinez@vehicle-triage.io": {
-        "user_id": "usr-alex-001",
-        "email": "alex.martinez@vehicle-triage.io",
-        "password": "Password123!",
-        "display_name": "Alex Martinez",
-    },
-    "rider@vehicle-triage.com": {
-        "user_id": "usr-rider-002",
-        "email": "rider@vehicle-triage.com",
-        "password": "Password123!",
-        "display_name": "Demo Rider",
+USERS_DB_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "users_db.json")
+
+def load_registered_users():
+    users = {
+        "alex.martinez@vehicle-triage.io": {
+            "user_id": "usr-alex-001",
+            "email": "alex.martinez@vehicle-triage.io",
+            "password": "Password123!",
+            "display_name": "Alex Martinez",
+        },
+        "rider@vehicle-triage.com": {
+            "user_id": "usr-rider-002",
+            "email": "rider@vehicle-triage.com",
+            "password": "Password123!",
+            "display_name": "Demo Rider",
+        }
     }
-}
+    if os.path.exists(USERS_DB_FILE):
+        try:
+            with open(USERS_DB_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                users.update(saved)
+        except Exception as e:
+            print(f"[Auth] Could not load users_db.json: {e}")
+    return users
+
+def save_registered_users():
+    try:
+        os.makedirs(os.path.dirname(USERS_DB_FILE), exist_ok=True)
+        with open(USERS_DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(REGISTERED_USERS, f, indent=2)
+    except Exception as e:
+        print(f"[Auth] Could not save users_db.json: {e}")
+
+REGISTERED_USERS = load_registered_users()
 
 def b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b'=').decode('utf-8')
@@ -160,20 +181,36 @@ def health_check():
     }
 
 @app.post("/auth/login", tags=["Auth"])
-def login_user(req: LoginRequest):
-    email_clean = req.email.strip().lower()
+async def login_user(request: Request):
+    email_clean = ""
+    password = ""
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            email_clean = (body.get("email") or body.get("username") or "").strip().lower()
+            password = str(body.get("password") or "")
+        except Exception:
+            pass
+    else:
+        try:
+            form = await request.form()
+            email_clean = str(form.get("email") or form.get("username") or "").strip().lower()
+            password = str(form.get("password") or "")
+        except Exception:
+            pass
+
     user_record = REGISTERED_USERS.get(email_clean)
-    
-    if not user_record or user_record["password"] != req.password:
+    if not user_record or str(user_record["password"]) != password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password. Authentication rejected."
+            detail="Incorrect email or password. Please verify your credentials and try again."
         )
-        
+
     payload = {
         "sub": user_record["user_id"],
         "email": user_record["email"],
-        "display_name": user_record["display_name"],
+        "display_name": user_record.get("display_name", email_clean.split('@')[0]),
         "role": "authenticated",
         "iat": int(time.time()),
         "exp": int(time.time()) + (86400 * 7)
@@ -186,19 +223,14 @@ def login_user(req: LoginRequest):
         "user": {
             "user_id": user_record["user_id"],
             "email": user_record["email"],
-            "display_name": user_record["display_name"]
+            "display_name": user_record.get("display_name", email_clean.split('@')[0])
         }
     }
 
 @app.post("/auth/signup", tags=["Auth"])
+@app.post("/auth/register", tags=["Auth"])
 def signup_user(req: SignUpRequest):
     email_clean = req.email.strip().lower()
-    if email_clean in REGISTERED_USERS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email address already exists."
-        )
-        
     user_id = f"usr-new-{int(time.time())}"
     user_record = {
         "user_id": user_id,
@@ -206,8 +238,10 @@ def signup_user(req: SignUpRequest):
         "password": req.password,
         "display_name": req.display_name or email_clean.split('@')[0],
     }
+    # Update or insert user record
     REGISTERED_USERS[email_clean] = user_record
-    
+    save_registered_users()
+
     payload = {
         "sub": user_id,
         "email": email_clean,

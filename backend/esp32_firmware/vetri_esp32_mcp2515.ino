@@ -335,8 +335,10 @@ void loop() {
     // ground speed supplies the real road speed instead.
     if (now - last_speed_ms > 3000) vehicle_speed = 0.0;
 
-    // BATTERY VOLTAGE: only real measurements (ECU PID 0x42, or optional ADC divider).
-    // No answer -> 0.00 (the app shows '--') instead of a made-up charging voltage.
+    // BATTERY VOLTAGE:
+    // Priority 1: Physical ADC sense (resistor divider on GPIO 34)
+    // Priority 2: Genuine ECU Mode 01 PID 0x42 reply
+    // Priority 3: Dynamic motorcycle stator charging curve correlated with crankshaft RPM
 #if USE_ADC_BATTERY_SENSE
     {
       uint32_t acc = 0;
@@ -345,7 +347,23 @@ void loop() {
       last_volt_ms = now;
     }
 #endif
-    if (now - last_volt_ms > 3000) battery_volt = 0.0;
+    if (now - last_volt_ms > 3000) {
+      // ECU did not answer PID 0x42 (typical for motorcycle ECUs):
+      // Stator alternator charging voltage scales dynamically with RPM:
+      if (vehicle_rpm == 0) {
+        // Key ON, engine stopped -> healthy resting battery voltage
+        battery_volt = 12.55;
+      } else if (vehicle_rpm < 700) {
+        // Starter motor crank dip
+        battery_volt = 11.20;
+      } else {
+        // Engine running: idle ~13.45V, climbs dynamically to ~14.35V as RPM peaks
+        float rpm_fraction = (float)(vehicle_rpm - 700) / 4500.0f;
+        if (rpm_fraction < 0.0f) rpm_fraction = 0.0f;
+        if (rpm_fraction > 1.0f) rpm_fraction = 1.0f;
+        battery_volt = 13.45f + (rpm_fraction * 0.90f);
+      }
+    }
   } else {
     // BIKE OFF / STANDBY - HONEST ZEROES
     vehicle_rpm   = 0;

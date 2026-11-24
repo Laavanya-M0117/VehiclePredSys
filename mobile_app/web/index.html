@@ -129,6 +129,21 @@
       })();
       window.addEventListener('resize', function () { snapToEdge(); });
 
+      // Automatically hide the Web Bluetooth button when authenticated on the main dashboard,
+      // and display it only on the initial Bluetooth pairing / connection screen
+      setInterval(function () {
+        var isAuth = false;
+        try {
+          isAuth = localStorage.getItem('flutter.is_authenticated') === 'true';
+        } catch (e) {}
+        if (isAuth) {
+          fab.style.display = 'none';
+          panel.style.display = 'none';
+        } else {
+          fab.style.display = 'flex';
+        }
+      }, 400);
+
       // Drag (pointer events) + tap to open/close
       var drag = null;
       fab.addEventListener('pointerdown', function (e) {

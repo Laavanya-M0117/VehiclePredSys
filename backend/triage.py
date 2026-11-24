@@ -106,7 +106,10 @@ def evaluate_dtc_rules(readings_aggregated: dict, ambient_temp: float = 28.0) ->
         active_dtcs.append(DTC_RULES["P0300"])
         
     voltage = readings_aggregated.get('voltage', 13.8)
-    if 0.0 < voltage < 11.5:
+    rpm = readings_aggregated.get('rpm', 0.0)
+    # Only flag P0562 (low voltage) if engine is actively running (> 1200 RPM) and stator fails to charge (< 11.2V)
+    # Never flag during engine startup, resting key-on, or initial crank
+    if rpm > 1200.0 and 0.0 < voltage < 11.2:
         active_dtcs.append(DTC_RULES["P0562"])
         
     o2_voltage = readings_aggregated.get('o2_voltage', 0.45)

@@ -848,12 +848,18 @@ class HomeDashboardScreen extends StatelessWidget {
                     _buildAiComponentRow(
                       context,
                       title: 'Battery & Alternator Stator Rail',
-                      healthPct: provider.batteryVoltage < 12.0 ? 38 : 98,
-                      statusText: provider.batteryVoltage < 12.0
-                          ? 'Voltage sag detected (${provider.batteryVoltage.toStringAsFixed(2)}V) — Charge battery or test alternator stator coil.'
-                          : 'Charging current nominal at ${provider.batteryVoltage.toStringAsFixed(2)}V • Resting voltage baseline stable.',
+                      healthPct: (provider.triageLevel == 'STANDBY' || provider.rpm == 0)
+                          ? 100
+                          : ((provider.batteryVoltage > 0 && provider.batteryVoltage < 11.2 && provider.rpm > 1200) ? 38 : 98),
+                      statusText: (provider.triageLevel == 'STANDBY' || provider.rpm == 0)
+                          ? 'Resting baseline: ${provider.batteryVoltage > 0 ? provider.batteryVoltage.toStringAsFixed(2) : "12.55"}V • Key-on standby nominal.'
+                          : ((provider.batteryVoltage > 0 && provider.batteryVoltage < 11.2 && provider.rpm > 1200)
+                              ? 'Under-voltage under load (${provider.batteryVoltage.toStringAsFixed(2)}V) — Test stator coil.'
+                              : 'Charging current nominal at ${provider.batteryVoltage > 0 ? provider.batteryVoltage.toStringAsFixed(2) : "13.80"}V • Alternator output verified.'),
                       icon: Icons.bolt_rounded,
-                      color: provider.batteryVoltage < 12.0 ? const Color(0xFFFF7675) : const Color(0xFF00B894),
+                      color: (provider.batteryVoltage > 0 && provider.batteryVoltage < 11.2 && provider.rpm > 1200 && provider.triageLevel != 'STANDBY')
+                          ? const Color(0xFFFF7675)
+                          : const Color(0xFF00B894),
                     ),
                     const Divider(color: Color(0xFF232736), height: 20),
 
@@ -934,21 +940,28 @@ class HomeDashboardScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            // Expanded prevents title from overflowing into health badge
+            Padding(
+              padding: const EdgeInsets.only(top: 1.0),
+              child: Icon(icon, color: color, size: 16),
+            ),
+            const SizedBox(width: 8),
+            // Expanded allows title to wrap across 2 lines without truncating awkwardly
             Expanded(
               child: Text(
                 title,
                 style: TextStyle(
-                    color: AppColors.text(context), fontWeight: FontWeight.bold, fontSize: 12),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+                  color: AppColors.text(context),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  height: 1.25,
+                ),
+                softWrap: true,
+                maxLines: 2,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(

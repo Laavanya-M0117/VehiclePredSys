@@ -51,10 +51,12 @@ class PredictiveTriageInference:
         else:
             cleaned_single = clean_and_validate_reading(sensor_reading_or_list)
 
-        # Standby state check: when bike is off/idle before ignition
+        # Standby state check: when bike is off/idle before ignition or stationary with engine off
         rpm = cleaned_single.get('rpm', 0.0)
-        voltage = cleaned_single.get('voltage', 0.0)
-        if rpm < 150.0 and voltage <= 0.0:
+        speed = cleaned_single.get('speed', 0.0)
+        voltage = cleaned_single.get('voltage', 12.55)
+        
+        if rpm < 150.0 and speed < 1.0:
             return {
                 'health_score': 100,
                 'triage_label': 'STANDBY',
@@ -62,7 +64,7 @@ class PredictiveTriageInference:
                 'class_probabilities': {'NORMAL': 1.0, 'OVERHEAT': 0.0, 'LEAN_MISFIRE': 0.0, 'ELECTRICAL': 0.0},
                 'rul_hours': 999.0,
                 'failure_probability': 0.0,
-                'explanation': 'Vehicle Standby: Ignition key is OFF or waiting for engine start. Telemetry ready.',
+                'explanation': 'Vehicle Standby: Ignition key is ON, engine stationary (0 RPM). Electrical and telemetry systems nominal.',
                 'active_dtcs': [],
                 'engineered_features': extract_ml_features(cleaned_single),
                 'model_version': 'HistGradientBoosting v2.0 (Dual-Head Edge Engine)'

@@ -140,7 +140,7 @@ class _DeviceRegistrationScreenState extends State<DeviceRegistrationScreen>
       final devId = widget.device['id'] ?? 'unknown';
       final rawDigits = _phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
       final phone = rawDigits.length >= 10 ? '+91 ' + rawDigits.substring(rawDigits.length - 10) : '';
-      provider.bindDevice(devId, email, displayName: _nameCtrl.text.trim(), email: email, phone: phone);
+      provider.bindDevice(devId, email, password: _passwordCtrl.text, displayName: _nameCtrl.text.trim(), email: email, phone: phone);
       provider.connectToDevice(widget.device);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainNavigationShell()),

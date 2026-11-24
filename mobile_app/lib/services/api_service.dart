@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static String get _defaultBaseUrl =>
@@ -47,44 +48,83 @@ class ApiService {
   }
 
   Future<AuthResult> login(String username, String password) async {
+    final cleanUsername = username.trim().toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. First attempt live authentication against the backend API
     try {
       final response = await http
           .post(
             Uri.parse(baseUrl + '/auth/login'),
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: {'username': username, 'password': password},
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'email': cleanUsername, 'password': password}),
           )
-          .timeout(const Duration(milliseconds: 2500));
+          .timeout(const Duration(milliseconds: 3500));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final token = data['access_token'];
         await _storage.write(key: 'jwt_token', value: token);
+        await prefs.setString('vetri_pwd_' + cleanUsername, password);
+        await prefs.setString('saved_login_password', password);
+        await prefs.setString('saved_login_email', cleanUsername);
         return AuthResult(success: true, token: token);
+      } else if (response.statusCode == 401) {
+        // Backend actively rejected password!
+        return AuthResult(
+          success: false,
+          errorMessage: 'Incorrect password. Please enter the password you registered with.',
+        );
       }
     } catch (e) {
-      debugPrint('Remote login fallback to local edge auth: ' + e.toString());
+      debugPrint('Remote login offline or timed out: ' + e.toString());
     }
 
-    final demoToken = 'vetri_edge_jwt_' + DateTime.now().millisecondsSinceEpoch.toString();
-    await _storage.write(key: 'jwt_token', value: demoToken);
-    return AuthResult(success: true, token: demoToken);
+    // 2. Local Edge Verification:
+    // When offline or using local edge storage, verify strictly against saved password for this user
+    final localSavedPwd = prefs.getString('vetri_pwd_' + cleanUsername);
+    final savedEmail = prefs.getString('saved_login_email')?.toLowerCase().trim();
+    final savedLoginPwd = prefs.getString('saved_login_password');
+
+    final expectedPwd = localSavedPwd ?? ((savedEmail == cleanUsername) ? savedLoginPwd : null);
+    if (expectedPwd != null && expectedPwd.isNotEmpty) {
+      if (password != expectedPwd) {
+        return AuthResult(
+          success: false,
+          errorMessage: 'Incorrect password. Authentication rejected.',
+        );
+      }
+      final demoToken = 'vetri_edge_jwt_' + DateTime.now().millisecondsSinceEpoch.toString();
+      await _storage.write(key: 'jwt_token', value: demoToken);
+      return AuthResult(success: true, token: demoToken);
+    }
+
+    return AuthResult(
+      success: false,
+      errorMessage: 'User not registered or invalid password. Please register your device first.',
+    );
   }
 
   Future<AuthResult> register(String email, String password, {String? displayName, String? phone}) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('vetri_pwd_' + cleanEmail, password);
+    await prefs.setString('saved_login_password', password);
+    await prefs.setString('saved_login_email', cleanEmail);
+
     try {
       final response = await http
           .post(
             Uri.parse(baseUrl + '/auth/register'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode({
-              'email': email,
+              'email': cleanEmail,
               'password': password,
               'display_name': displayName,
               'phone': phone,
             }),
           )
-          .timeout(const Duration(milliseconds: 2500));
+          .timeout(const Duration(milliseconds: 3500));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
@@ -93,7 +133,7 @@ class ApiService {
         return AuthResult(success: true, token: token);
       }
     } catch (e) {
-      debugPrint('Remote register fallback to local edge auth: ' + e.toString());
+      debugPrint('Remote register offline or timed out: ' + e.toString());
     }
 
     final demoToken = 'vetri_edge_jwt_' + DateTime.now().millisecondsSinceEpoch.toString();

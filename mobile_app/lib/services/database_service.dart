@@ -81,6 +81,7 @@ class DatabaseService {
   Future<void> bindDeviceUser({
     required String deviceId,
     required String userIdentifier,
+    String? password,
     String? displayName,
     String? email,
     String? phone,
@@ -92,6 +93,7 @@ class DatabaseService {
     final bindingData = {
       'device_id': deviceId,
       'user_identifier': userIdentifier,
+      'password': password ?? '',
       'display_name': displayName ?? 'VETRI Driver',
       'email': email ?? '',
       'phone': phone ?? '',
@@ -106,6 +108,12 @@ class DatabaseService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('vetri_device_binding_$deviceId', jsonEncode(bindingData));
+      if (password != null && password.isNotEmpty) {
+        if (email != null && email.isNotEmpty) {
+          await prefs.setString('vetri_pwd_' + email.trim().toLowerCase(), password);
+        }
+        await prefs.setString('vetri_device_pwd_$deviceId', password);
+      }
     } catch (e) {
       debugPrint('SharedPreferences bind error: $e');
     }
